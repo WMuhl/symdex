@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: macos-14
+            rid: osx-arm64
+          - os: windows-latest
+            rid: win-x64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish self-contained single-file binary (${{ matrix.rid }})
+        run: >
+          dotnet publish src/Symdex.Cli/Symdex.Cli.csproj
+          -c Release -r ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o publish/${{ matrix.rid }}
+
+      - name: Stage zip contents
+        shell: bash
+        run: |
+          set -eu
+          STAGE="stage/${{ matrix.rid }}"
+          mkdir -p "$STAGE"
+          # Copy the whole publish output, not just the exe: Symdex.Roslyn's MSBuildWorkspace
+          # dependency spawns a separate BuildHost-netcore/BuildHost-net472 child process, whose
+          # files PublishSingleFile leaves alongside the exe rather than bundling inside it.
+          cp -r publish/${{ matrix.rid }}/. "$STAGE/"
+          cp -r skill "$STAGE/skill"
+
+      - name: Zip (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -eu
+          cd "stage/${{ matrix.rid }}"
+          zip -r "../../symdex-skill-${{ matrix.rid }}.zip" .
+
+      - name: Zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "stage/${{ matrix.rid }}/*" -DestinationPath "symdex-skill-${{ matrix.rid }}.zip"
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: symdex-skill-${{ matrix.rid }}.zip
