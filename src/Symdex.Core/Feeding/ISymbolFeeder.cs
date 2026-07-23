@@ -14,7 +14,7 @@ public interface ISymbolFeeder
     FeederResult Feed(FeedRequest request);
 }
 
-public sealed record FeedRequest(string RepoRoot, IReadOnlyList<ScannedFile> ChangedFiles);
+public sealed record FeedRequest(string RepoRoot, IReadOnlyList<ScannedFile> ChangedFiles, string? SolutionPath = null);
 
 /// <summary>
 /// Result of a feed attempt. When <see cref="Success"/> is false the caller should fall back

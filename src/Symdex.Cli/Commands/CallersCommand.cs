@@ -6,10 +6,10 @@ internal static class CallersCommand
 {
     private static readonly string[] CallerKinds = [RefKinds.Call, RefKinds.Reference];
 
-    public static int Run(string repo, bool json, int limit, string symbol)
+    public static int Run(string repo, bool json, int limit, string symbol, string? solution)
     {
         var repoRoot = Path.GetFullPath(repo);
-        using var db = IndexerFactory.EnsureFreshAndOpen(repoRoot);
+        using var db = IndexerFactory.EnsureFreshAndOpen(repoRoot, solution);
 
         var resolution = SymbolResolution.Resolve(db, symbol);
         switch (resolution.Outcome)

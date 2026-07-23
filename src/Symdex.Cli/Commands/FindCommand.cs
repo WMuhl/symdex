@@ -2,10 +2,10 @@ namespace Symdex.Cli.Commands;
 
 internal static class FindCommand
 {
-    public static int Run(string repo, bool json, int limit, string query, string? kind)
+    public static int Run(string repo, bool json, int limit, string query, string? kind, string? solution)
     {
         var repoRoot = Path.GetFullPath(repo);
-        using var db = IndexerFactory.EnsureFreshAndOpen(repoRoot);
+        using var db = IndexerFactory.EnsureFreshAndOpen(repoRoot, solution);
 
         var symbols = db.Find(query, kind, OutputWriter.HardCapLimit);
 

@@ -1,5 +1,6 @@
 using Symdex.Core;
 using Symdex.Core.Feeding;
+using Symdex.Roslyn;
 using Symdex.TreeSitter;
 
 namespace Symdex.Cli;
@@ -11,18 +12,18 @@ namespace Symdex.Cli;
 /// </summary>
 internal static class IndexerFactory
 {
-    public static Indexer Create() => new([new TreeSitterFeeder()]);
+    public static Indexer Create() => new([new RoslynFeeder(), new TreeSitterFeeder()]);
 
-    public static IndexDatabase EnsureFreshAndOpen(string repoRoot)
+    public static IndexDatabase EnsureFreshAndOpen(string repoRoot, string? solutionPath)
     {
         var db = IndexDatabase.OpenOrCreate(repoRoot);
-        RunAndReport(repoRoot, db);
+        RunAndReport(repoRoot, db, solutionPath);
         return db;
     }
 
-    public static void RunAndReport(string repoRoot, IndexDatabase db)
+    public static void RunAndReport(string repoRoot, IndexDatabase db, string? solutionPath)
     {
-        var result = Create().EnsureFresh(repoRoot, db);
+        var result = Create().EnsureFresh(repoRoot, db, solutionPath);
 
         foreach (var warning in result.Warnings)
         {

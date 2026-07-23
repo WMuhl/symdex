@@ -6,11 +6,13 @@ using Symdex.Cli.Commands;
 var repoOption = new Option<string>("--repo", () => Directory.GetCurrentDirectory(), "Repository root");
 var jsonOption = new Option<bool>("--json", () => false, "Emit JSON lines instead of plain text");
 var limitOption = new Option<int>("--limit", () => OutputWriter.DefaultLimit, "Max results (hard cap 200)");
+var solutionOption = new Option<string?>("--solution", "Path to a .sln/.csproj for the Roslyn C# feeder (auto-discovered otherwise)");
 
 var root = new RootCommand("symdex - local codebase index for coding agents");
 root.AddGlobalOption(repoOption);
 root.AddGlobalOption(jsonOption);
 root.AddGlobalOption(limitOption);
+root.AddGlobalOption(solutionOption);
 
 var fileArgument = new Argument<string>("file", "Path to a source file");
 var outline = new Command("outline", "List all symbols in a file") { fileArgument };
@@ -19,8 +21,9 @@ outline.SetHandler(ctx =>
     var repo = ctx.ParseResult.GetValueForOption(repoOption)!;
     var json = ctx.ParseResult.GetValueForOption(jsonOption);
     var limit = ctx.ParseResult.GetValueForOption(limitOption);
+    var solution = ctx.ParseResult.GetValueForOption(solutionOption);
     var file = ctx.ParseResult.GetValueForArgument(fileArgument);
-    ctx.ExitCode = RunSafely(() => OutlineCommand.Run(repo, json, limit, file));
+    ctx.ExitCode = RunSafely(() => OutlineCommand.Run(repo, json, limit, file, solution));
 });
 root.AddCommand(outline);
 
@@ -32,9 +35,10 @@ find.SetHandler(ctx =>
     var repo = ctx.ParseResult.GetValueForOption(repoOption)!;
     var json = ctx.ParseResult.GetValueForOption(jsonOption);
     var limit = ctx.ParseResult.GetValueForOption(limitOption);
+    var solution = ctx.ParseResult.GetValueForOption(solutionOption);
     var name = ctx.ParseResult.GetValueForArgument(nameArgument);
     var kind = ctx.ParseResult.GetValueForOption(kindOption);
-    ctx.ExitCode = RunSafely(() => FindCommand.Run(repo, json, limit, name, kind));
+    ctx.ExitCode = RunSafely(() => FindCommand.Run(repo, json, limit, name, kind, solution));
 });
 root.AddCommand(find);
 
@@ -45,8 +49,9 @@ refs.SetHandler(ctx =>
     var repo = ctx.ParseResult.GetValueForOption(repoOption)!;
     var json = ctx.ParseResult.GetValueForOption(jsonOption);
     var limit = ctx.ParseResult.GetValueForOption(limitOption);
+    var solution = ctx.ParseResult.GetValueForOption(solutionOption);
     var symbol = ctx.ParseResult.GetValueForArgument(symbolArgument);
-    ctx.ExitCode = RunSafely(() => RefsCommand.Run(repo, json, limit, symbol));
+    ctx.ExitCode = RunSafely(() => RefsCommand.Run(repo, json, limit, symbol, solution));
 });
 root.AddCommand(refs);
 
@@ -56,8 +61,9 @@ callers.SetHandler(ctx =>
     var repo = ctx.ParseResult.GetValueForOption(repoOption)!;
     var json = ctx.ParseResult.GetValueForOption(jsonOption);
     var limit = ctx.ParseResult.GetValueForOption(limitOption);
+    var solution = ctx.ParseResult.GetValueForOption(solutionOption);
     var symbol = ctx.ParseResult.GetValueForArgument(symbolArgument);
-    ctx.ExitCode = RunSafely(() => CallersCommand.Run(repo, json, limit, symbol));
+    ctx.ExitCode = RunSafely(() => CallersCommand.Run(repo, json, limit, symbol, solution));
 });
 root.AddCommand(callers);
 
@@ -66,7 +72,8 @@ rebuild.SetHandler(ctx =>
 {
     var repo = ctx.ParseResult.GetValueForOption(repoOption)!;
     var json = ctx.ParseResult.GetValueForOption(jsonOption);
-    ctx.ExitCode = RunSafely(() => RebuildCommand.Run(repo, json));
+    var solution = ctx.ParseResult.GetValueForOption(solutionOption);
+    ctx.ExitCode = RunSafely(() => RebuildCommand.Run(repo, json, solution));
 });
 root.AddCommand(rebuild);
 

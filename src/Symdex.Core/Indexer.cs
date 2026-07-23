@@ -12,7 +12,7 @@ public sealed class Indexer(IReadOnlyList<ISymbolFeeder> feeders)
 {
     private readonly record struct HashedFile(ScannedFile File, string Hash);
 
-    public IndexRunResult EnsureFresh(string repoRoot, IndexDatabase db)
+    public IndexRunResult EnsureFresh(string repoRoot, IndexDatabase db, string? solutionPath = null)
     {
         var scanned = RepoScanner.Scan(repoRoot);
         var hashed = scanned
@@ -47,7 +47,7 @@ public sealed class Indexer(IReadOnlyList<ISymbolFeeder> feeders)
         {
             var language = group.Key;
             var filesForLanguage = group.ToList();
-            var resultsByFile = FeedWithFallback(repoRoot, language, filesForLanguage, warnings);
+            var resultsByFile = FeedWithFallback(repoRoot, language, filesForLanguage, solutionPath, warnings);
 
             foreach (var file in filesForLanguage)
             {
@@ -71,10 +71,10 @@ public sealed class Indexer(IReadOnlyList<ISymbolFeeder> feeders)
     }
 
     private IReadOnlyDictionary<string, FileFeedResult> FeedWithFallback(
-        string repoRoot, string language, IReadOnlyList<ScannedFile> files, List<string> warnings)
+        string repoRoot, string language, IReadOnlyList<ScannedFile> files, string? solutionPath, List<string> warnings)
     {
         var candidates = feeders.Where(f => f.CanHandle(language)).ToList();
-        var request = new FeedRequest(repoRoot, files);
+        var request = new FeedRequest(repoRoot, files, solutionPath);
 
         foreach (var feeder in candidates)
         {

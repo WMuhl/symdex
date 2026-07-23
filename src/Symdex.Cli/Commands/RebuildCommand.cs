@@ -4,13 +4,13 @@ namespace Symdex.Cli.Commands;
 
 internal static class RebuildCommand
 {
-    public static int Run(string repo, bool json)
+    public static int Run(string repo, bool json, string? solution)
     {
         var repoRoot = Path.GetFullPath(repo);
         using var db = IndexDatabase.OpenOrCreate(repoRoot);
         db.Rebuild();
 
-        var result = IndexerFactory.Create().EnsureFresh(repoRoot, db);
+        var result = IndexerFactory.Create().EnsureFresh(repoRoot, db, solution);
 
         foreach (var warning in result.Warnings)
         {

@@ -2,10 +2,10 @@ namespace Symdex.Cli.Commands;
 
 internal static class OutlineCommand
 {
-    public static int Run(string repo, bool json, int limit, string file)
+    public static int Run(string repo, bool json, int limit, string file, string? solution)
     {
         var repoRoot = Path.GetFullPath(repo);
-        using var db = IndexerFactory.EnsureFreshAndOpen(repoRoot);
+        using var db = IndexerFactory.EnsureFreshAndOpen(repoRoot, solution);
 
         var relativePath = PathUtil.ToRepoRelative(repoRoot, file);
         var symbols = db.Outline(relativePath);
