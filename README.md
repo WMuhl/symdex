@@ -57,3 +57,19 @@ Where the build instructions were ambiguous, the simpler option was chosen:
 - **FTS vs LIKE in `find`**: both are used together (a `LIKE '%query%'` substring match unioned
   with an FTS5 prefix-phrase match) since the spec calls for "substring + FTS match" rather than
   one or the other.
+- **`.js`/`.jsx` grammar mapping**: only `tree-sitter-c-sharp` and `tree-sitter-typescript` are
+  vendored (per the build instructions), and the latter ships two grammars - `typescript` (`.ts`)
+  and `tsx` (`.tsx`/JSX). `.js` is parsed with the `typescript` grammar and `.jsx` with `tsx`; both
+  are supersets of plain JS, so this covers the four extensions without vendoring a third grammar.
+- **`global.json` pinning + Roslyn package versions**: this machine has both the .NET 8 and .NET
+  10 SDKs installed, and letting `Microsoft.Build.Locator` pick "whatever's highest" caused
+  `MSBuildWorkspace` to intermittently fail loading plain SDK-style projects (missing `System.*`
+  reference-assembly resolution) depending on which process launched `symdex`. `global.json` pins
+  the SDK to 8.x, `RoslynFeeder` explicitly prefers an SDK-major-version-8 MSBuild instance over
+  `MSBuildLocator.RegisterDefaults()`'s "highest installed" default, and the `Microsoft.CodeAnalysis.*`
+  package versions are pinned to the 4.11.x line whose bundled compiler version matches that SDK.
+- **Roslyn requires a prior `dotnet restore`**: `MSBuildWorkspace` cannot open an unrestored
+  project (no `obj/project.assets.json`) - it doesn't restore on your behalf. A repo an agent is
+  actively working in has normally already been restored as part of the developer's own workflow;
+  if it hasn't, symdex just falls back to the tree-sitter feeder for `.cs` files, per the mandatory
+  graceful-degradation behavior.

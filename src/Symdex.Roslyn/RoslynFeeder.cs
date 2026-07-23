@@ -39,10 +39,31 @@ public sealed class RoslynFeeder : ISymbolFeeder
 
             if (!Microsoft.Build.Locator.MSBuildLocator.IsRegistered)
             {
-                Microsoft.Build.Locator.MSBuildLocator.RegisterDefaults();
+                RegisterMatchingSdk();
             }
 
             _registered = true;
+        }
+    }
+
+    // RegisterDefaults() picks the highest installed SDK, which is not necessarily the one whose
+    // bundled compiler matches the Microsoft.CodeAnalysis.* package versions this project
+    // references - and which SDK it picks can vary by host process (plain `dotnet run` vs. a
+    // `dotnet test` test host), causing flaky "System not found"-style compile errors. Pin to the
+    // SDK major version this repo targets (net8.0 / global.json) instead, for determinism.
+    private static void RegisterMatchingSdk()
+    {
+        var instances = Microsoft.Build.Locator.MSBuildLocator.QueryVisualStudioInstances().ToList();
+        var chosen = instances.FirstOrDefault(i => i.Version.Major == 8)
+            ?? instances.OrderByDescending(i => i.Version).FirstOrDefault();
+
+        if (chosen is not null)
+        {
+            Microsoft.Build.Locator.MSBuildLocator.RegisterInstance(chosen);
+        }
+        else
+        {
+            Microsoft.Build.Locator.MSBuildLocator.RegisterDefaults();
         }
     }
 }

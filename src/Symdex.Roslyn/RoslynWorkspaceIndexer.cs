@@ -19,13 +19,13 @@ internal static class RoslynWorkspaceIndexer
 
         using var workspace = MSBuildWorkspace.Create();
         var failures = new List<string>();
-        workspace.RegisterWorkspaceFailedHandler(e =>
+        workspace.WorkspaceFailed += (_, e) =>
         {
             if (e.Diagnostic.Kind == WorkspaceDiagnosticKind.Failure)
             {
                 failures.Add(e.Diagnostic.Message);
             }
-        });
+        };
 
         Solution solution;
         try

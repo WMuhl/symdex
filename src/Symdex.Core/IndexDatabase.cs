@@ -21,7 +21,10 @@ public sealed class IndexDatabase : IDisposable
         var dir = Path.GetDirectoryName(dbPath)!;
         Directory.CreateDirectory(dir);
 
-        var connection = new SqliteConnection($"Data Source={dbPath}");
+        // Pooling=False: Microsoft.Data.Sqlite pools connections by default, which can keep the
+        // native file handle open after Dispose() - this repo's .index/ directory needs to be
+        // deletable (rebuild, temp test fixtures) right after the connection is closed.
+        var connection = new SqliteConnection($"Data Source={dbPath};Pooling=False");
         connection.Open();
 
         using (var pragma = connection.CreateCommand())

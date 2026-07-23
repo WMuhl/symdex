@@ -17,3 +17,5 @@
 (export_statement (lexical_declaration (variable_declarator name: (identifier) @name))) @def
 
 (import_statement source: (string) @source) @def
+
+(import_specifier name: (identifier) @source) @def

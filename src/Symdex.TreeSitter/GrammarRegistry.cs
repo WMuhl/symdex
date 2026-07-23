@@ -24,7 +24,7 @@ internal static class GrammarRegistry
     private static readonly string[] TypeScriptPatternKinds =
     [
         SymbolKinds.Class, SymbolKinds.Interface, SymbolKinds.Type, SymbolKinds.Function,
-        SymbolKinds.Method, SymbolKinds.Field, SymbolKinds.Export, "import",
+        SymbolKinds.Method, SymbolKinds.Field, SymbolKinds.Export, "import", "import",
     ];
 
     private static readonly Lazy<string> CSharpQuerySource = new(() => ReadEmbeddedQuery("csharp.scm"));
