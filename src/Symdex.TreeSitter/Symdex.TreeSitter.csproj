@@ -1,7 +1,48 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Symdex.Core\Symdex.Core.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="queries\*.scm" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TreeSitterNativeDir>$(MSBuildThisFileDirectory)native-build\</TreeSitterNativeDir>
+  </PropertyGroup>
+
+  <!--
+    Compiles the vendored tree-sitter runtime + grammars (grammars/) into a single native
+    library before the managed build runs. Skipped (with a message, not an error) when no C
+    toolchain is available - see scripts/build-native.* for details. CI installs a compiler on
+    every platform, so this only actually skips on a dev machine without one.
+  -->
+  <Target Name="BuildTreeSitterNative" BeforeTargets="BeforeBuild;AssignTargetPaths;CoreCompile">
+    <MakeDir Directories="$(TreeSitterNativeDir)" Condition="!Exists('$(TreeSitterNativeDir)')" />
+    <PropertyGroup>
+      <TreeSitterNativeDirArg>$(TreeSitterNativeDir.TrimEnd('\'))</TreeSitterNativeDirArg>
+    </PropertyGroup>
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)scripts\build-native.ps1&quot; -OutDir &quot;$(TreeSitterNativeDirArg)&quot;"
+          Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+    <Exec Command="sh &quot;$(MSBuildThisFileDirectory)scripts/build-native.sh&quot; &quot;$(TreeSitterNativeDirArg)&quot;"
+          Condition="!$([MSBuild]::IsOSPlatform('Windows'))" />
+
+    <!-- Nested so these items are (re-)evaluated after the Exec calls above, once the native
+         library actually exists on disk - a top-level ItemGroup would evaluate its Exists()
+         conditions before this target ever runs. -->
+    <ItemGroup>
+      <None Include="$(TreeSitterNativeDir)symdex_treesitter.dll" Condition="Exists('$(TreeSitterNativeDir)symdex_treesitter.dll')"
+            CopyToOutputDirectory="PreserveNewest" Link="symdex_treesitter.dll" Visible="false" />
+      <None Include="$(TreeSitterNativeDir)libsymdex_treesitter.so" Condition="Exists('$(TreeSitterNativeDir)libsymdex_treesitter.so')"
+            CopyToOutputDirectory="PreserveNewest" Link="libsymdex_treesitter.so" Visible="false" />
+      <None Include="$(TreeSitterNativeDir)libsymdex_treesitter.dylib" Condition="Exists('$(TreeSitterNativeDir)libsymdex_treesitter.dylib')"
+            CopyToOutputDirectory="PreserveNewest" Link="libsymdex_treesitter.dylib" Visible="false" />
+    </ItemGroup>
+  </Target>
 
 </Project>

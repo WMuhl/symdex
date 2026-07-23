@@ -1,0 +1,24 @@
+LIBRARY symdex_treesitter
+EXPORTS
+    ts_parser_new
+    ts_parser_delete
+    ts_parser_set_language
+    ts_parser_parse_string
+    ts_tree_delete
+    ts_tree_root_node
+    ts_node_type
+    ts_node_start_byte
+    ts_node_end_byte
+    ts_node_start_point
+    ts_node_end_point
+    ts_node_is_named
+    ts_node_parent
+    ts_node_child_count
+    ts_node_child
+    ts_query_new
+    ts_query_delete
+    ts_query_capture_name_for_id
+    ts_query_cursor_new
+    ts_query_cursor_delete
+    ts_query_cursor_exec
+    ts_query_cursor_next_match

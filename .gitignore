@@ -7,11 +7,8 @@ obj/
 out/
 publish/
 
-## Native tree-sitter build output
-src/Symdex.TreeSitter/native/*.so
-src/Symdex.TreeSitter/native/*.dylib
-src/Symdex.TreeSitter/native/*.dll
-src/Symdex.TreeSitter/native/*.o
+## Native tree-sitter build output (Native/ with a capital N is source, not build output)
+src/Symdex.TreeSitter/native-build/
 
 ## IDE / OS
 .vs/
