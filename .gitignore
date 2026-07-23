@@ -1,0 +1,23 @@
+## Symdex index (per-repo local database, never committed)
+.index/
+
+## .NET build artifacts
+bin/
+obj/
+out/
+publish/
+
+## Native tree-sitter build output
+src/Symdex.TreeSitter/native/*.so
+src/Symdex.TreeSitter/native/*.dylib
+src/Symdex.TreeSitter/native/*.dll
+src/Symdex.TreeSitter/native/*.o
+
+## IDE / OS
+.vs/
+.vscode/
+*.user
+.DS_Store
+
+## Test results
+TestResults/

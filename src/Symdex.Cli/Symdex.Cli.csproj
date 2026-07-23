@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Symdex.Core\Symdex.Core.csproj" />
+    <ProjectReference Include="..\Symdex.TreeSitter\Symdex.TreeSitter.csproj" />
+    <ProjectReference Include="..\Symdex.Roslyn\Symdex.Roslyn.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>symdex</AssemblyName>
+    <RootNamespace>Symdex.Cli</RootNamespace>
+  </PropertyGroup>
+
+</Project>
