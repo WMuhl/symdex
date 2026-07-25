@@ -82,3 +82,8 @@ Where the build instructions were ambiguous, the simpler option was chosen:
   is exactly the mandatory graceful-degradation path already required for other Roslyn failures.
   Running from a normal `dotnet build`/`dotnet test` output (not single-file) is unaffected and was
   used for all correctness testing in this repo.
+
+## License
+
+MIT - see [LICENSE](LICENSE). Matches the license on every vendored dependency (tree-sitter core,
+tree-sitter-c-sharp, tree-sitter-typescript are all MIT).
