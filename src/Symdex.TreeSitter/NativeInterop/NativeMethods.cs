@@ -138,4 +138,7 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib)]
     public static partial IntPtr tree_sitter_tsx();
+
+    [LibraryImport(Lib)]
+    public static partial IntPtr tree_sitter_python();
 }

@@ -66,4 +66,5 @@ public static class Languages
     public const string CSharp = "csharp";
     public const string TypeScript = "typescript";
     public const string JavaScript = "javascript";
+    public const string Python = "python";
 }

@@ -12,6 +12,7 @@ public static class RepoScanner
     private static readonly string[] SkippedDirNames =
     [
         "node_modules", "bin", "obj", "dist", ".index", ".git", "out", "build", ".vs", ".vscode",
+        "__pycache__", ".venv", "venv", ".tox", ".mypy_cache", "site-packages",
     ];
 
     private static readonly Dictionary<string, string> ExtensionToLanguage = new(StringComparer.OrdinalIgnoreCase)
@@ -21,6 +22,8 @@ public static class RepoScanner
         [".tsx"] = Languages.TypeScript,
         [".js"] = Languages.JavaScript,
         [".jsx"] = Languages.JavaScript,
+        [".py"] = Languages.Python,
+        [".pyi"] = Languages.Python,
     };
 
     public static IReadOnlyList<ScannedFile> Scan(string repoRoot)
