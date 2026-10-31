@@ -12,7 +12,7 @@ src/
   Symdex.Cli/          console app (binary name: symdex)
   Symdex.Core/          schema, SQLite access, file hashing, freshness checking
   Symdex.Roslyn/         C# semantic feeder (MSBuildWorkspace + Roslyn)
-  Symdex.TreeSitter/     tree-sitter feeder + vendored grammars (TS/JS, and C# fallback)
+  Symdex.TreeSitter/     tree-sitter feeder + vendored grammars (TS/JS, Python, and C# fallback)
 skill/                  packaged agent skill wrapping the CLI
 tests/                  xUnit tests + a small fixture repo used by CI
 ```

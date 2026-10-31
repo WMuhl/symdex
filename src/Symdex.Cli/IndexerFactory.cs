@@ -8,7 +8,7 @@ namespace Symdex.Cli;
 /// <summary>
 /// Wires up the feeders every verb uses to keep the index fresh before answering a query.
 /// C# is fed by Roslyn first, falling back to tree-sitter if the workspace can't load;
-/// TypeScript/JavaScript are tree-sitter only.
+/// TypeScript, JavaScript, and Python are tree-sitter only.
 /// </summary>
 internal static class IndexerFactory
 {
