@@ -67,7 +67,9 @@ try {
         @{ Path = Join-Path $grammars "tree-sitter-typescript\typescript\src\parser.c"; Inc = @((Join-Path $grammars "tree-sitter-typescript\typescript\src")) },
         @{ Path = Join-Path $grammars "tree-sitter-typescript\typescript\src\scanner.c"; Inc = @((Join-Path $grammars "tree-sitter-typescript\typescript\src")) },
         @{ Path = Join-Path $grammars "tree-sitter-typescript\tsx\src\parser.c"; Inc = @((Join-Path $grammars "tree-sitter-typescript\tsx\src")) },
-        @{ Path = Join-Path $grammars "tree-sitter-typescript\tsx\src\scanner.c"; Inc = @((Join-Path $grammars "tree-sitter-typescript\tsx\src")) }
+        @{ Path = Join-Path $grammars "tree-sitter-typescript\tsx\src\scanner.c"; Inc = @((Join-Path $grammars "tree-sitter-typescript\tsx\src")) },
+        @{ Path = Join-Path $grammars "tree-sitter-python\src\parser.c"; Inc = @((Join-Path $grammars "tree-sitter-python\src")) },
+        @{ Path = Join-Path $grammars "tree-sitter-python\src\scanner.c"; Inc = @((Join-Path $grammars "tree-sitter-python\src")) }
     )
 
     $objs = @()

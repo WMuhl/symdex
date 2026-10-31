@@ -59,6 +59,9 @@ compile "$GRAMMARS/tree-sitter-typescript/typescript/src/scanner.c" -I"$GRAMMARS
 compile "$GRAMMARS/tree-sitter-typescript/tsx/src/parser.c" -I"$GRAMMARS/tree-sitter-typescript/tsx/src"
 compile "$GRAMMARS/tree-sitter-typescript/tsx/src/scanner.c" -I"$GRAMMARS/tree-sitter-typescript/tsx/src"
 
+compile "$GRAMMARS/tree-sitter-python/src/parser.c" -I"$GRAMMARS/tree-sitter-python/src"
+compile "$GRAMMARS/tree-sitter-python/src/scanner.c" -I"$GRAMMARS/tree-sitter-python/src"
+
 mkdir -p "$OUT_DIR"
 # shellcheck disable=SC2086
 "$CC" $SHARED_FLAG -o "$OUT_DIR/libsymdex_treesitter.$EXT" $OBJS
