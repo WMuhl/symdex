@@ -200,7 +200,10 @@ public sealed class IndexDatabase : IDisposable
         return ReadSymbols(cmd);
     }
 
-    /// <summary>Distinct fqnames (or, for tree-sitter symbols without an fqname, distinct names) matching the query.</summary>
+    /// <summary>
+    /// Distinct symbol keys for a query. An exact <c>fqname</c> match wins over <c>name</c>;
+    /// otherwise the distinct fqnames (or names, when fqname is null) of symbols with that name.
+    /// </summary>
     public IReadOnlyList<string> ResolveSymbolCandidates(string? nameOrFqName)
     {
         if (string.IsNullOrEmpty(nameOrFqName))
@@ -208,14 +211,30 @@ public sealed class IndexDatabase : IDisposable
             return [];
         }
 
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
+        var byFqName = ReadKeys("""
+            SELECT DISTINCT fqname AS key
+            FROM symbols
+            WHERE fqname = $exact
+            ORDER BY key;
+            """, nameOrFqName);
+        if (byFqName.Count > 0)
+        {
+            return byFqName;
+        }
+
+        return ReadKeys("""
             SELECT DISTINCT COALESCE(fqname, name) AS key
             FROM symbols
-            WHERE fqname = $exact OR name = $exact
+            WHERE name = $exact
             ORDER BY key;
-            """;
-        cmd.Parameters.AddWithValue("$exact", nameOrFqName);
+            """, nameOrFqName);
+    }
+
+    private List<string> ReadKeys(string sql, string exact)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.Parameters.AddWithValue("$exact", exact);
         var results = new List<string>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
