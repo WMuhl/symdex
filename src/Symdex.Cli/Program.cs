@@ -1,6 +1,7 @@
 using System.CommandLine;
 using Symdex.Cli;
 using Symdex.Cli.Commands;
+using Symdex.Cli.Mcp;
 
 var repoOption = new Option<string>("--repo")
 {
@@ -105,6 +106,14 @@ callers.SetAction(parseResult =>
     return RunSafely(() => CallersCommand.Run(repo, json, limit, symbol!, solution));
 });
 root.Add(callers);
+
+var mcp = new Command("mcp", "Serve the index over Model Context Protocol on stdio");
+mcp.SetAction((parseResult, cancellationToken) =>
+    McpCommand.RunAsync(
+        parseResult.GetValue(repoOption)!,
+        parseResult.GetValue(solutionOption),
+        cancellationToken));
+root.Add(mcp);
 
 var rebuild = new Command("rebuild", "Drop and rebuild the whole index");
 rebuild.SetAction(parseResult =>

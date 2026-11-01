@@ -10,12 +10,19 @@ namespace Symdex.Roslyn;
 /// = false) whenever the workspace can't be loaded or a project fails to compile - the caller
 /// (Symdex.Core.Indexer) then re-runs the same files through the tree-sitter feeder instead.
 /// </summary>
-public sealed class RoslynFeeder : ISymbolFeeder
+public sealed class RoslynFeeder : ISymbolFeeder, IDisposable
 {
     private static readonly object RegisterLock = new();
     private static bool _registered;
+    private object? _warmSession;
 
     public string Name => "roslyn";
+
+    /// <summary>
+    /// When set, the MSBuild workspace opened for a solution stays on this feeder and is
+    /// reused for later feeds of that same solution. <see cref="Dispose"/> releases it.
+    /// </summary>
+    public bool KeepWorkspaceWarm { get; set; }
 
     public bool CanHandle(string language) => language == Languages.CSharp;
 
@@ -28,7 +35,22 @@ public sealed class RoslynFeeder : ISymbolFeeder
     // Split into its own method so the JIT doesn't touch any MSBuildWorkspace/Microsoft.Build
     // type until *after* MSBuildLocator has registered an instance - referencing those types
     // any earlier can make the runtime resolve the wrong (or a missing) MSBuild assembly set.
-    private static FeederResult RunFeed(FeedRequest request) => RoslynWorkspaceIndexer.Feed(request);
+    private FeederResult RunFeed(FeedRequest request)
+    {
+        if (!KeepWorkspaceWarm)
+        {
+            return RoslynWorkspaceIndexer.Feed(request);
+        }
+
+        var session = (RoslynWorkspaceSession)(_warmSession ??= new RoslynWorkspaceSession());
+        return session.Feed(request);
+    }
+
+    public void Dispose()
+    {
+        (_warmSession as IDisposable)?.Dispose();
+        _warmSession = null;
+    }
 
     private static void EnsureMsBuildRegistered(string repoRoot)
     {
