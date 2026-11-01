@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -33,7 +34,9 @@ internal static class McpCommand
                     options.ServerInfo = new Implementation
                     {
                         Name = "symdex",
-                        Version = "0.1.0",
+                        Version = typeof(McpCommand).Assembly
+                            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+                            .Split('+')[0] ?? "0.0.0",
                     };
                     options.ServerInstructions =
                         "Prefer symdex tools over grep or reading whole files to find where a symbol is declared or used. Results are locations and signatures, not source bodies; read only the reported line spans. When a tool returns ambiguous candidates, call it again with one fully-qualified name. The index refreshes itself when files change.";
