@@ -1,0 +1,2 @@
+{"symbol":"System.Decimal SampleLib.IPaymentProcessor.Charge(System.Decimal)"}
+{"kind":"call","filePath":"csharp/SampleLib/CheckoutService.cs","line":17}

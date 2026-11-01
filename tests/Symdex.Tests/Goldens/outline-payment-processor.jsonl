@@ -1,0 +1,2 @@
+{"kind":"class","name":"PaymentProcessor","signature":"class PaymentProcessor","startLine":4,"endLine":11}
+{"kind":"method","name":"Charge","signature":"public decimal Charge(decimal amount)","startLine":7,"endLine":10}
