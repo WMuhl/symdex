@@ -7,6 +7,18 @@ internal static class TestUtil
 {
     private static readonly string[] SkipDirs = ["bin", "obj", ".index"];
 
+    // MSBuildLocator publishes these into the process environment when it registers an SDK.
+    // A later `dotnet restore` in the same process inherits them and then fails to load the
+    // SDK resolver (wrong host / runtime). The child restore must see a clean dotnet environment.
+    private static readonly string[] MsBuildLocatorVariables =
+    [
+        "DOTNET_HOST_PATH",
+        "DOTNET_MSBUILD_SDK_RESOLVER_CLI_DIR",
+        "MSBUILD_EXE_PATH",
+        "MSBuildExtensionsPath",
+        "MSBuildSDKsPath",
+    ];
+
     /// <summary>Copies tests/fixtures/&lt;name&gt; into a fresh temp directory so each test run
     /// gets an isolated copy (indexing writes a .index/code.db next to the source files).</summary>
     public static string CopyFixture(string name, [CallerFilePath] string here = "")
@@ -50,6 +62,10 @@ internal static class TestUtil
             RedirectStandardError = true,
             UseShellExecute = false,
         };
+        foreach (var name in MsBuildLocatorVariables)
+        {
+            psi.Environment.Remove(name);
+        }
 
         using var process = Process.Start(psi)!;
         var stdout = process.StandardOutput.ReadToEnd();

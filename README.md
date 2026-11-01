@@ -19,7 +19,7 @@ tests/                  xUnit tests + a small fixture repo used by CI
 
 ## Building
 
-Requires the .NET 8 SDK.
+Requires the .NET 10 SDK.
 
 ```bash
 dotnet build symdex.sln
@@ -44,7 +44,7 @@ before the query runs. Nothing needs to be indexed manually.
 Where the build instructions were ambiguous, the simpler option was chosen:
 
 - **Solution file format**: classic `.sln`, not the newer `.slnx` XML format. `.slnx` requires a
-  fairly recent SDK; `.sln` works with the .NET 8 SDK this project targets and with older CI
+  fairly recent SDK; `.sln` works with the .NET 10 SDK this project targets and with older CI
   runners without extra setup.
 - **Feeder fallback granularity**: the Roslyn feeder loads the whole solution/compilation (it
   needs full context to resolve cross-file references correctly) but only persists database rows
@@ -61,13 +61,13 @@ Where the build instructions were ambiguous, the simpler option was chosen:
   vendored (per the build instructions), and the latter ships two grammars - `typescript` (`.ts`)
   and `tsx` (`.tsx`/JSX). `.js` is parsed with the `typescript` grammar and `.jsx` with `tsx`; both
   are supersets of plain JS, so this covers the four extensions without vendoring a third grammar.
-- **`global.json` pinning + Roslyn package versions**: this machine has both the .NET 8 and .NET
-  10 SDKs installed, and letting `Microsoft.Build.Locator` pick "whatever's highest" caused
-  `MSBuildWorkspace` to intermittently fail loading plain SDK-style projects (missing `System.*`
-  reference-assembly resolution) depending on which process launched `symdex`. `global.json` pins
-  the SDK to 8.x, `RoslynFeeder` explicitly prefers an SDK-major-version-8 MSBuild instance over
-  `MSBuildLocator.RegisterDefaults()`'s "highest installed" default, and the `Microsoft.CodeAnalysis.*`
-  package versions are pinned to the 4.11.x line whose bundled compiler version matches that SDK.
+- **`global.json` pinning + Roslyn package versions**: `global.json` pins the SDK to 10.0.x
+  (`rollForward: latestFeature`). `RoslynFeeder` registers the MSBuild instance from the SDK that
+  `dotnet --version` resolves in the target repo (that repo's `global.json`, otherwise the latest
+  installed SDK), so the workspace uses the same SDK that restore used.
+  `MSBuildLocator.RegisterDefaults()` follows the host process instead, and a mismatch leaves the
+  compilation with no reference assemblies. The `Microsoft.CodeAnalysis.*` packages are pinned to
+  the 5.3.x line, matching the compiler bundled with the .NET 10 SDK.
 - **Roslyn requires a prior `dotnet restore`**: `MSBuildWorkspace` cannot open an unrestored
   project (no `obj/project.assets.json`) - it doesn't restore on your behalf. A repo an agent is
   actively working in has normally already been restored as part of the developer's own workflow;

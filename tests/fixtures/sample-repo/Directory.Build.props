@@ -2,7 +2,7 @@
   <!-- Isolates this fixture from the outer symdex repo's Directory.Build.props (which sets
        TreatWarningsAsErrors, etc.) - it's a target codebase for tests, not part of symdex itself. -->
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>

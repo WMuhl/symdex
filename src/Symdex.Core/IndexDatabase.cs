@@ -201,8 +201,13 @@ public sealed class IndexDatabase : IDisposable
     }
 
     /// <summary>Distinct fqnames (or, for tree-sitter symbols without an fqname, distinct names) matching the query.</summary>
-    public IReadOnlyList<string> ResolveSymbolCandidates(string nameOrFqName)
+    public IReadOnlyList<string> ResolveSymbolCandidates(string? nameOrFqName)
     {
+        if (string.IsNullOrEmpty(nameOrFqName))
+        {
+            return [];
+        }
+
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = """
             SELECT DISTINCT COALESCE(fqname, name) AS key
@@ -221,8 +226,15 @@ public sealed class IndexDatabase : IDisposable
         return results;
     }
 
-    public IReadOnlyList<RefRecord> RefsFor(string symbolFqNameOrName, IReadOnlyCollection<string>? kindFilter, int limit)
+    public IReadOnlyList<RefRecord> RefsFor(string? symbolFqNameOrName, IReadOnlyCollection<string>? kindFilter, int limit)
     {
+        // A missing symbol (tree-sitter rows with no fqname, or a resolution miss) is an empty
+        // result. Binding null as the key makes Microsoft.Data.Sqlite throw "Value must be set."
+        if (string.IsNullOrEmpty(symbolFqNameOrName))
+        {
+            return [];
+        }
+
         var kindClause = "";
         if (kindFilter is { Count: > 0 })
         {

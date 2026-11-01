@@ -1,83 +1,122 @@
 using System.CommandLine;
-using System.CommandLine.Invocation;
 using Symdex.Cli;
 using Symdex.Cli.Commands;
 
-var repoOption = new Option<string>("--repo", () => Directory.GetCurrentDirectory(), "Repository root");
-var jsonOption = new Option<bool>("--json", () => false, "Emit JSON lines instead of plain text");
-var limitOption = new Option<int>("--limit", () => OutputWriter.DefaultLimit, "Max results (hard cap 200)");
-var solutionOption = new Option<string?>("--solution", "Path to a .sln/.csproj for the Roslyn C# feeder (auto-discovered otherwise)");
+var repoOption = new Option<string>("--repo")
+{
+    Description = "Repository root",
+    Recursive = true,
+    DefaultValueFactory = _ => Directory.GetCurrentDirectory(),
+};
+var jsonOption = new Option<bool>("--json")
+{
+    Description = "Emit JSON lines instead of plain text",
+    Recursive = true,
+    DefaultValueFactory = _ => false,
+};
+var limitOption = new Option<int>("--limit")
+{
+    Description = "Max results (hard cap 200)",
+    Recursive = true,
+    DefaultValueFactory = _ => OutputWriter.DefaultLimit,
+};
+var solutionOption = new Option<string?>("--solution")
+{
+    Description = "Path to a .sln/.csproj for the Roslyn C# feeder (auto-discovered otherwise)",
+    Recursive = true,
+};
 
 var root = new RootCommand("symdex - local codebase index for coding agents");
-root.AddGlobalOption(repoOption);
-root.AddGlobalOption(jsonOption);
-root.AddGlobalOption(limitOption);
-root.AddGlobalOption(solutionOption);
+root.Add(repoOption);
+root.Add(jsonOption);
+root.Add(limitOption);
+root.Add(solutionOption);
 
-var fileArgument = new Argument<string>("file", "Path to a source file");
-var outline = new Command("outline", "List all symbols in a file") { fileArgument };
-outline.SetHandler(ctx =>
+var fileArgument = new Argument<string>("file")
 {
-    var repo = ctx.ParseResult.GetValueForOption(repoOption)!;
-    var json = ctx.ParseResult.GetValueForOption(jsonOption);
-    var limit = ctx.ParseResult.GetValueForOption(limitOption);
-    var solution = ctx.ParseResult.GetValueForOption(solutionOption);
-    var file = ctx.ParseResult.GetValueForArgument(fileArgument);
-    ctx.ExitCode = RunSafely(() => OutlineCommand.Run(repo, json, limit, file, solution));
+    Description = "Path to a source file",
+};
+var outline = new Command("outline", "List all symbols in a file");
+outline.Add(fileArgument);
+outline.SetAction(parseResult =>
+{
+    var repo = parseResult.GetValue(repoOption)!;
+    var json = parseResult.GetValue(jsonOption);
+    var limit = parseResult.GetValue(limitOption);
+    var solution = parseResult.GetValue(solutionOption);
+    var file = parseResult.GetValue(fileArgument);
+    return RunSafely(() => OutlineCommand.Run(repo, json, limit, file!, solution));
 });
-root.AddCommand(outline);
+root.Add(outline);
 
-var nameArgument = new Argument<string>("name", "Symbol name or substring to search for");
-var kindOption = new Option<string?>("--kind", "Filter results to this symbol kind");
-var find = new Command("find", "Find symbols by name/fqname/doc (substring + FTS)") { nameArgument, kindOption };
-find.SetHandler(ctx =>
+var nameArgument = new Argument<string>("name")
 {
-    var repo = ctx.ParseResult.GetValueForOption(repoOption)!;
-    var json = ctx.ParseResult.GetValueForOption(jsonOption);
-    var limit = ctx.ParseResult.GetValueForOption(limitOption);
-    var solution = ctx.ParseResult.GetValueForOption(solutionOption);
-    var name = ctx.ParseResult.GetValueForArgument(nameArgument);
-    var kind = ctx.ParseResult.GetValueForOption(kindOption);
-    ctx.ExitCode = RunSafely(() => FindCommand.Run(repo, json, limit, name, kind, solution));
+    Description = "Symbol name or substring to search for",
+};
+var kindOption = new Option<string?>("--kind")
+{
+    Description = "Filter results to this symbol kind",
+};
+var find = new Command("find", "Find symbols by name/fqname/doc (substring + FTS)");
+find.Add(nameArgument);
+find.Add(kindOption);
+find.SetAction(parseResult =>
+{
+    var repo = parseResult.GetValue(repoOption)!;
+    var json = parseResult.GetValue(jsonOption);
+    var limit = parseResult.GetValue(limitOption);
+    var solution = parseResult.GetValue(solutionOption);
+    var name = parseResult.GetValue(nameArgument);
+    var kind = parseResult.GetValue(kindOption);
+    return RunSafely(() => FindCommand.Run(repo, json, limit, name!, kind, solution));
 });
-root.AddCommand(find);
+root.Add(find);
 
-var symbolArgument = new Argument<string>("symbol", "Fully-qualified name or short name of the symbol");
-var refs = new Command("refs", "List all reference sites for a symbol") { symbolArgument };
-refs.SetHandler(ctx =>
+var symbolArgument = new Argument<string>("symbol")
 {
-    var repo = ctx.ParseResult.GetValueForOption(repoOption)!;
-    var json = ctx.ParseResult.GetValueForOption(jsonOption);
-    var limit = ctx.ParseResult.GetValueForOption(limitOption);
-    var solution = ctx.ParseResult.GetValueForOption(solutionOption);
-    var symbol = ctx.ParseResult.GetValueForArgument(symbolArgument);
-    ctx.ExitCode = RunSafely(() => RefsCommand.Run(repo, json, limit, symbol, solution));
+    Description = "Fully-qualified name or short name of the symbol",
+};
+var refs = new Command("refs", "List all reference sites for a symbol");
+refs.Add(symbolArgument);
+refs.SetAction(parseResult =>
+{
+    var repo = parseResult.GetValue(repoOption)!;
+    var json = parseResult.GetValue(jsonOption);
+    var limit = parseResult.GetValue(limitOption);
+    var solution = parseResult.GetValue(solutionOption);
+    var symbol = parseResult.GetValue(symbolArgument);
+    return RunSafely(() => RefsCommand.Run(repo, json, limit, symbol!, solution));
 });
-root.AddCommand(refs);
+root.Add(refs);
 
-var callers = new Command("callers", "List call/reference sites for a method or function") { symbolArgument };
-callers.SetHandler(ctx =>
+var callersSymbol = new Argument<string>("symbol")
 {
-    var repo = ctx.ParseResult.GetValueForOption(repoOption)!;
-    var json = ctx.ParseResult.GetValueForOption(jsonOption);
-    var limit = ctx.ParseResult.GetValueForOption(limitOption);
-    var solution = ctx.ParseResult.GetValueForOption(solutionOption);
-    var symbol = ctx.ParseResult.GetValueForArgument(symbolArgument);
-    ctx.ExitCode = RunSafely(() => CallersCommand.Run(repo, json, limit, symbol, solution));
+    Description = "Fully-qualified name or short name of the symbol",
+};
+var callers = new Command("callers", "List call/reference sites for a method or function");
+callers.Add(callersSymbol);
+callers.SetAction(parseResult =>
+{
+    var repo = parseResult.GetValue(repoOption)!;
+    var json = parseResult.GetValue(jsonOption);
+    var limit = parseResult.GetValue(limitOption);
+    var solution = parseResult.GetValue(solutionOption);
+    var symbol = parseResult.GetValue(callersSymbol);
+    return RunSafely(() => CallersCommand.Run(repo, json, limit, symbol!, solution));
 });
-root.AddCommand(callers);
+root.Add(callers);
 
 var rebuild = new Command("rebuild", "Drop and rebuild the whole index");
-rebuild.SetHandler(ctx =>
+rebuild.SetAction(parseResult =>
 {
-    var repo = ctx.ParseResult.GetValueForOption(repoOption)!;
-    var json = ctx.ParseResult.GetValueForOption(jsonOption);
-    var solution = ctx.ParseResult.GetValueForOption(solutionOption);
-    ctx.ExitCode = RunSafely(() => RebuildCommand.Run(repo, json, solution));
+    var repo = parseResult.GetValue(repoOption)!;
+    var json = parseResult.GetValue(jsonOption);
+    var solution = parseResult.GetValue(solutionOption);
+    return RunSafely(() => RebuildCommand.Run(repo, json, solution));
 });
-root.AddCommand(rebuild);
+root.Add(rebuild);
 
-return await root.InvokeAsync(args);
+return await root.Parse(args).InvokeAsync();
 
 static int RunSafely(Func<int> action)
 {

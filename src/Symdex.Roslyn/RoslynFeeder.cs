@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using Microsoft.Build.Locator;
 using Symdex.Core;
 using Symdex.Core.Feeding;
 
@@ -19,16 +21,16 @@ public sealed class RoslynFeeder : ISymbolFeeder
 
     public FeederResult Feed(FeedRequest request)
     {
-        EnsureMsBuildRegistered();
+        EnsureMsBuildRegistered(request.RepoRoot);
         return RunFeed(request);
     }
 
     // Split into its own method so the JIT doesn't touch any MSBuildWorkspace/Microsoft.Build
-    // type until *after* MSBuildLocator.RegisterDefaults() has run - referencing those types
+    // type until *after* MSBuildLocator has registered an instance - referencing those types
     // any earlier can make the runtime resolve the wrong (or a missing) MSBuild assembly set.
     private static FeederResult RunFeed(FeedRequest request) => RoslynWorkspaceIndexer.Feed(request);
 
-    private static void EnsureMsBuildRegistered()
+    private static void EnsureMsBuildRegistered(string repoRoot)
     {
         lock (RegisterLock)
         {
@@ -37,33 +39,147 @@ public sealed class RoslynFeeder : ISymbolFeeder
                 return;
             }
 
-            if (!Microsoft.Build.Locator.MSBuildLocator.IsRegistered)
+            if (!MSBuildLocator.IsRegistered)
             {
-                RegisterMatchingSdk();
+                RegisterMatchingSdk(repoRoot);
             }
 
             _registered = true;
         }
     }
 
-    // RegisterDefaults() picks the highest installed SDK, which is not necessarily the one whose
-    // bundled compiler matches the Microsoft.CodeAnalysis.* package versions this project
-    // references - and which SDK it picks can vary by host process (plain `dotnet run` vs. a
-    // `dotnet test` test host), causing flaky "System not found"-style compile errors. Pin to the
-    // SDK major version this repo targets (net8.0 / global.json) instead, for determinism.
-    private static void RegisterMatchingSdk()
+    // The MSBuild that loads a project must be the SDK `dotnet` would use in that repo
+    // (its global.json, otherwise the latest installed). RegisterDefaults() follows the host
+    // process instead, so a restore done with one SDK and a workspace opened with another
+    // yields a compilation that has no reference assemblies.
+    private static void RegisterMatchingSdk(string repoRoot)
     {
-        var instances = Microsoft.Build.Locator.MSBuildLocator.QueryVisualStudioInstances().ToList();
-        var chosen = instances.FirstOrDefault(i => i.Version.Major == 8)
-            ?? instances.OrderByDescending(i => i.Version).FirstOrDefault();
+        var options = new VisualStudioInstanceQueryOptions
+        {
+            DiscoveryTypes = DiscoveryType.DotNetSdk,
+            WorkingDirectory = repoRoot,
+            AllowAllRuntimeVersions = true,
+            AllowAllDotnetLocations = true,
+        };
+        var instances = MSBuildLocator.QueryVisualStudioInstances(options).ToList();
+
+        var wanted = ResolveTargetSdkVersion(repoRoot);
+        VisualStudioInstance? chosen = null;
+        if (wanted is not null)
+        {
+            chosen = instances.FirstOrDefault(i => SdkVersionsMatch(i.Version, wanted));
+            if (chosen is null)
+            {
+                var path = FindSdkDirectory(wanted);
+                if (path is not null)
+                {
+                    MSBuildLocator.RegisterMSBuildPath(path);
+                    return;
+                }
+            }
+        }
+
+        chosen ??= instances.FirstOrDefault()
+            ?? MSBuildLocator.QueryVisualStudioInstances().OrderByDescending(i => i.Version).FirstOrDefault();
 
         if (chosen is not null)
         {
-            Microsoft.Build.Locator.MSBuildLocator.RegisterInstance(chosen);
+            MSBuildLocator.RegisterInstance(chosen);
         }
         else
         {
-            Microsoft.Build.Locator.MSBuildLocator.RegisterDefaults();
+            MSBuildLocator.RegisterDefaults();
+        }
+    }
+
+    private static string? ResolveTargetSdkVersion(string repoRoot)
+    {
+        var output = RunDotNet("--version", repoRoot);
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return null;
+        }
+
+        var line = output.Trim().Split('\r', '\n')[0].Trim();
+        return line.Length == 0 ? null : line;
+    }
+
+    private static string? FindSdkDirectory(string version)
+    {
+        var output = RunDotNet("--list-sdks", repoRoot: null);
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return null;
+        }
+
+        foreach (var raw in output.Split('\r', '\n'))
+        {
+            var line = raw.Trim();
+            var bracket = line.IndexOf('[');
+            var close = line.IndexOf(']');
+            if (bracket <= 0 || close <= bracket)
+            {
+                continue;
+            }
+
+            var reported = line[..bracket].Trim();
+            if (!string.Equals(reported, version, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var path = Path.Combine(line[(bracket + 1)..close].Trim(), reported);
+            if (File.Exists(Path.Combine(path, "MSBuild.dll")))
+            {
+                return path;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool SdkVersionsMatch(Version installed, string reported)
+    {
+        if (!Version.TryParse(reported, out var wanted))
+        {
+            return false;
+        }
+
+        static int Part(int value) => value < 0 ? 0 : value;
+        return installed.Major == wanted.Major
+            && installed.Minor == wanted.Minor
+            && Part(installed.Build) == Part(wanted.Build);
+    }
+
+    private static string? RunDotNet(string arguments, string? repoRoot)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo("dotnet", arguments)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            if (!string.IsNullOrEmpty(repoRoot))
+            {
+                psi.WorkingDirectory = repoRoot;
+            }
+
+            using var process = Process.Start(psi);
+            if (process is null)
+            {
+                return null;
+            }
+
+            var stdout = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+            return process.ExitCode == 0 ? stdout : null;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return null;
         }
     }
 }
