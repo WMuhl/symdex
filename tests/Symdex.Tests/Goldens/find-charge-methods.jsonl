@@ -1,0 +1,2 @@
+{"kind":"method","fqName":"System.Decimal SampleLib.IPaymentProcessor.Charge(System.Decimal)","signature":"decimal Charge(decimal amount)","filePath":"csharp/SampleLib/IPaymentProcessor.cs","startLine":7,"endLine":7}
+{"kind":"method","fqName":"System.Decimal SampleLib.PaymentProcessor.Charge(System.Decimal)","signature":"public decimal Charge(decimal amount)","filePath":"csharp/SampleLib/PaymentProcessor.cs","startLine":7,"endLine":10}

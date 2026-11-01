@@ -5,7 +5,8 @@ namespace Symdex.Tests;
 
 internal static class TestUtil
 {
-    private static readonly string[] SkipDirs = ["bin", "obj", ".index"];
+    private static readonly string[] FixtureSkipDirs = ["bin", "obj", ".index"];
+    private static readonly string[] TreeSkipDirs = ["bin", ".index"];
 
     // MSBuildLocator publishes these into the process environment when it registers an SDK.
     // A later `dotnet restore` in the same process inherits them and then fails to load the
@@ -28,22 +29,31 @@ internal static class TestUtil
         var source = Path.Combine(repoRoot, "tests", "fixtures", name);
 
         var dest = Directory.CreateTempSubdirectory($"symdex-fixture-{name}-").FullName;
-        CopyDirectory(source, dest);
+        CopyDirectory(source, dest, FixtureSkipDirs);
         return dest;
     }
 
-    private static void CopyDirectory(string source, string dest)
+    /// <summary>Copies an already-restored tree, including <c>obj/</c>, so a test can index
+    /// without running <c>dotnet restore</c> again. Skips <c>bin/</c> and <c>.index/</c>.</summary>
+    public static string CopyTree(string source)
+    {
+        var dest = Directory.CreateTempSubdirectory("symdex-copy-").FullName;
+        CopyDirectory(source, dest, TreeSkipDirs);
+        return dest;
+    }
+
+    private static void CopyDirectory(string source, string dest, string[] skipDirs)
     {
         Directory.CreateDirectory(dest);
         foreach (var dir in Directory.EnumerateDirectories(source))
         {
             var name = Path.GetFileName(dir);
-            if (SkipDirs.Contains(name, StringComparer.OrdinalIgnoreCase))
+            if (skipDirs.Contains(name, StringComparer.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            CopyDirectory(dir, Path.Combine(dest, name));
+            CopyDirectory(dir, Path.Combine(dest, name), skipDirs);
         }
 
         foreach (var file in Directory.EnumerateFiles(source))
