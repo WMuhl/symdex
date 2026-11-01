@@ -1,0 +1,17 @@
+<Project>
+
+  <!--
+    PackTool globs $(PublishDir). This target depends on Publish and runs before PackTool, so the
+    host native library is removed after publish copies it and before the glob. It therefore stays
+    out of tools/<tfm>/any/; every RID is loaded from runtimes/<rid>/native/. Plain `dotnet publish`
+    does not run PackTool, so the per-RID zips keep the library beside the app.
+  -->
+  <Target Name="RemoveHostNativeFromToolPublish"
+          BeforeTargets="PackTool"
+          DependsOnTargets="Publish"
+          Condition="'$(_IsPacking)' == 'true'">
+    <Message Importance="high" Text="symdex: omitting host native library from the tool publish folder" />
+    <Delete Files="$(PublishDir)symdex_treesitter.dll;$(PublishDir)libsymdex_treesitter.so;$(PublishDir)libsymdex_treesitter.dylib" />
+  </Target>
+
+</Project>
