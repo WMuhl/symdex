@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-Requires the .NET 8 SDK (`global.json` pins the exact version - see "MSBuildLocator" below for why).
+Requires the .NET 10 SDK (`global.json` pins the 10.0.x band - see "MSBuildLocator" below for why).
 
 ```bash
 dotnet build symdex.sln                 # build everything
