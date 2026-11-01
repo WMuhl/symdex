@@ -14,10 +14,81 @@
     <InternalsVisibleTo Include="Symdex.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <AssemblyName>symdex</AssemblyName>
     <RootNamespace>Symdex.Cli</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>symdex</ToolCommandName>
+    <PackageId>symdex</PackageId>
+    <Description>Local codebase index for coding agents. Queries symbols, references, and file outlines from a per-repo SQLite database.</Description>
+    <Authors>WMuhl</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/WMuhl/symdex</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/WMuhl/symdex</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>code-index;symbols;roslyn;tree-sitter;agents</PackageTags>
+    <!-- Prebuilt per-RID natives (CI). Absent locally; the host build under native-build/ is packed instead. -->
+    <TreeSitterPrebuiltNativeDir Condition="'$(TreeSitterPrebuiltNativeDir)' == ''">$([MSBuild]::NormalizePath($(MSBuildThisFileDirectory), '..\..\artifacts\rid-natives'))</TreeSitterPrebuiltNativeDir>
   </PropertyGroup>
+
+  <ItemGroup>
+    <_TreeSitterRid Include="win-x64" NativeFileName="symdex_treesitter.dll" />
+    <_TreeSitterRid Include="linux-x64" NativeFileName="libsymdex_treesitter.so" />
+    <_TreeSitterRid Include="linux-arm64" NativeFileName="libsymdex_treesitter.so" />
+    <_TreeSitterRid Include="osx-x64" NativeFileName="libsymdex_treesitter.dylib" />
+    <_TreeSitterRid Include="osx-arm64" NativeFileName="libsymdex_treesitter.dylib" />
+  </ItemGroup>
+
+  <!--
+    Packs runtimes/<rid>/native/<library> for each prebuilt RID that exists, plus the host
+    native from Symdex.TreeSitter/native-build when that RID was not supplied prebuilt.
+    Evaluated during pack (after Build) so Exists() sees the library the pre-build target just compiled.
+  -->
+  <Target Name="IncludeTreeSitterNativesInPackage" BeforeTargets="_GetPackageFiles" DependsOnTargets="Build">
+    <PropertyGroup>
+      <_TreeSitterPrebuiltDir>$([MSBuild]::EnsureTrailingSlash($([MSBuild]::NormalizePath($(TreeSitterPrebuiltNativeDir)))))</_TreeSitterPrebuiltDir>
+      <_TreeSitterLocalNativeDir>$([MSBuild]::EnsureTrailingSlash($([MSBuild]::NormalizePath($(MSBuildThisFileDirectory), '..\Symdex.TreeSitter\native-build'))))</_TreeSitterLocalNativeDir>
+      <_DirSep>$([System.IO.Path]::DirectorySeparatorChar)</_DirSep>
+      <_HostNativeFileName Condition="$(NETCoreSdkRuntimeIdentifier.StartsWith('win'))">symdex_treesitter.dll</_HostNativeFileName>
+      <_HostNativeFileName Condition="$(NETCoreSdkRuntimeIdentifier.StartsWith('osx'))">libsymdex_treesitter.dylib</_HostNativeFileName>
+      <_HostNativeFileName Condition="'$(_HostNativeFileName)' == ''">libsymdex_treesitter.so</_HostNativeFileName>
+      <_HostNativePath>$(_TreeSitterLocalNativeDir)$(_HostNativeFileName)</_HostNativePath>
+      <_HostPackagePath>runtimes/$(NETCoreSdkRuntimeIdentifier)/native/$(_HostNativeFileName)</_HostPackagePath>
+      <_HostPrebuiltPath>$(_TreeSitterPrebuiltDir)$(NETCoreSdkRuntimeIdentifier)$(_DirSep)$(_HostNativeFileName)</_HostPrebuiltPath>
+      <_HostAlreadyPacked Condition="Exists('$(_HostPrebuiltPath)')">true</_HostAlreadyPacked>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_TreeSitterNativeToPack Remove="@(_TreeSitterNativeToPack)" />
+      <_TreeSitterNativeToPack Include="$(_TreeSitterPrebuiltDir)%(_TreeSitterRid.Identity)$(_DirSep)%(_TreeSitterRid.NativeFileName)"
+                               Condition="Exists('$(_TreeSitterPrebuiltDir)%(_TreeSitterRid.Identity)$(_DirSep)%(_TreeSitterRid.NativeFileName)')">
+        <PackagePath>runtimes/%(_TreeSitterRid.Identity)/native/%(_TreeSitterRid.NativeFileName)</PackagePath>
+      </_TreeSitterNativeToPack>
+      <_TreeSitterNativeToPack Include="$(_HostNativePath)"
+                               Condition="Exists('$(_HostNativePath)') and '$(_HostAlreadyPacked)' != 'true'">
+        <PackagePath>$(_HostPackagePath)</PackagePath>
+      </_TreeSitterNativeToPack>
+    </ItemGroup>
+
+    <Error Condition="'@(_TreeSitterNativeToPack)' == ''"
+           Text="symdex: no tree-sitter native library to pack. Build native-build for this machine, or pass -p:TreeSitterPrebuiltNativeDir with per-RID libraries." />
+
+    <ItemGroup>
+      <None Remove="@(_TreeSitterNativeToPack)" />
+      <None Include="@(_TreeSitterNativeToPack)">
+        <Pack>true</Pack>
+        <PackagePath>%(_TreeSitterNativeToPack.PackagePath)</PackagePath>
+      </None>
+    </ItemGroup>
+
+    <Message Importance="high" Text="symdex: packing native %(_TreeSitterNativeToPack.Identity) -&gt; %(_TreeSitterNativeToPack.PackagePath)" />
+  </Target>
 
 </Project>

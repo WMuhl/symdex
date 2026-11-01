@@ -7,6 +7,9 @@ obj/
 out/
 publish/
 
+## Local pack output (nupkg and staged per-RID natives)
+artifacts/
+
 ## Native tree-sitter build output (Native/ with a capital N is source, not build output)
 src/Symdex.TreeSitter/native-build/
 

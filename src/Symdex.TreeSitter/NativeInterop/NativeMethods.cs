@@ -59,6 +59,11 @@ internal static partial class NativeMethods
 {
     private const string Lib = "symdex_treesitter";
 
+    static NativeMethods()
+    {
+        NativeLibraryProbe.EnsureResolver();
+    }
+
     [LibraryImport(Lib)]
     public static partial IntPtr ts_parser_new();
 

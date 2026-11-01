@@ -73,15 +73,12 @@ Where the build instructions were ambiguous, the simpler option was chosen:
   actively working in has normally already been restored as part of the developer's own workflow;
   if it hasn't, symdex just falls back to the tree-sitter feeder for `.cs` files, per the mandatory
   graceful-degradation behavior.
-- **Known limitation: Roslyn under the published single-file binary.** The `release.yml` binary is
-  published with `PublishSingleFile=true`, under which `Assembly.Location` for the main assembly
-  is empty - a well-known single-file-deployment gotcha that trips up some path resolution inside
-  `Microsoft.Build.Locator`/`MSBuildWorkspace`'s child "BuildHost" process launch. In that specific
-  hosting mode the Roslyn feeder currently fails to load a solution and the CLI transparently falls
-  back to the tree-sitter feeder for `.cs` files - correct results, just syntax-only for C# - which
-  is exactly the mandatory graceful-degradation path already required for other Roslyn failures.
-  Running from a normal `dotnet build`/`dotnet test` output (not single-file) is unaffected and was
-  used for all correctness testing in this repo.
+- **Published builds keep Roslyn working.** Releases ship a framework-dependent .NET tool and
+  per-RID zips of a normal publish (`PublishSingleFile` is not used). Single-file publish leaves
+  `Assembly.Location` empty, and `Microsoft.Build.Locator` / `MSBuildWorkspace` then fail to resolve
+  the SDK, so the Roslyn feeder falls back to tree-sitter for C#. The tool package and the zips keep
+  ordinary assemblies on disk, so that path resolution works. Roslyn still needs a .NET 10 runtime
+  and a repo that has already been `dotnet restore`d.
 
 ## License
 

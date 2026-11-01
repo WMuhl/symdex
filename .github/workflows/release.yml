@@ -7,20 +7,24 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
-  publish:
+  native-and-zip:
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             rid: linux-x64
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
+          - os: macos-13
+            rid: osx-x64
           - os: macos-14
             rid: osx-arm64
           - os: windows-latest
             rid: win-x64
-
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -30,26 +34,52 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Publish self-contained single-file binary (${{ matrix.rid }})
+      - name: Build native library
+        run: dotnet build src/Symdex.TreeSitter/Symdex.TreeSitter.csproj -c Release
+
+      - name: Stage native library
+        shell: bash
+        run: |
+          set -eu
+          stage="native-stage/${{ matrix.rid }}"
+          mkdir -p "$stage"
+          copied=0
+          for name in symdex_treesitter.dll libsymdex_treesitter.so libsymdex_treesitter.dylib; do
+            src="src/Symdex.TreeSitter/native-build/$name"
+            if [ -f "$src" ]; then
+              cp "$src" "$stage/"
+              copied=$((copied + 1))
+            fi
+          done
+          if [ "$copied" -ne 1 ]; then
+            echo "expected exactly one native library, found $copied" >&2
+            exit 1
+          fi
+
+      - name: Upload native library
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.rid }}
+          path: native-stage/${{ matrix.rid }}/
+          if-no-files-found: error
+
+      - name: Publish framework-dependent (${{ matrix.rid }})
         run: >
           dotnet publish src/Symdex.Cli/Symdex.Cli.csproj
-          -c Release -r ${{ matrix.rid }}
-          --self-contained true
-          -p:PublishSingleFile=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
+          -c Release
+          -r ${{ matrix.rid }}
+          --self-contained false
+          -p:PublishSingleFile=false
           -o publish/${{ matrix.rid }}
 
       - name: Stage zip contents
         shell: bash
         run: |
           set -eu
-          STAGE="stage/${{ matrix.rid }}"
-          mkdir -p "$STAGE"
-          # Copy the whole publish output, not just the exe: Symdex.Roslyn's MSBuildWorkspace
-          # dependency spawns a separate BuildHost-netcore/BuildHost-net472 child process, whose
-          # files PublishSingleFile leaves alongside the exe rather than bundling inside it.
-          cp -r publish/${{ matrix.rid }}/. "$STAGE/"
-          cp -r skill "$STAGE/skill"
+          stage="stage/${{ matrix.rid }}"
+          mkdir -p "$stage"
+          cp -a "publish/${{ matrix.rid }}/." "$stage/"
+          cp -a skill "$stage/skill"
 
       - name: Zip (Unix)
         if: runner.os != 'Windows'
@@ -65,7 +95,142 @@ jobs:
         run: |
           Compress-Archive -Path "stage/${{ matrix.rid }}/*" -DestinationPath "symdex-skill-${{ matrix.rid }}.zip"
 
-      - name: Upload release asset
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: zip-${{ matrix.rid }}
+          path: symdex-skill-${{ matrix.rid }}.zip
+          if-no-files-found: error
+
+  pack:
+    needs: native-and-zip
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Download native libraries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          path: native-downloads
+
+      - name: Lay out prebuilt natives
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p artifacts/rid-natives
+          found=0
+          for dir in native-downloads/native-*; do
+            [ -d "$dir" ] || continue
+            base=$(basename "$dir")
+            rid=${base#native-}
+            mkdir -p "artifacts/rid-natives/$rid"
+            cp -a "$dir"/. "artifacts/rid-natives/$rid/"
+            found=$((found + 1))
+          done
+          if [ "$found" -ne 5 ]; then
+            echo "expected 5 native RID artifacts, found $found" >&2
+            exit 1
+          fi
+          find artifacts/rid-natives -type f -print
+
+      - name: Pack tool
+        shell: bash
+        run: |
+          set -eu
+          version="${GITHUB_REF_NAME#v}"
+          if [ -z "$version" ] || [ "$version" = "$GITHUB_REF_NAME" ]; then
+            echo "tag '$GITHUB_REF_NAME' must look like v1.2.3" >&2
+            exit 1
+          fi
+          dotnet pack src/Symdex.Cli/Symdex.Cli.csproj -c Release \
+            -p:Version="$version" \
+            -p:TreeSitterPrebuiltNativeDir="$PWD/artifacts/rid-natives" \
+            -o artifacts/package
+
+      - name: Upload nupkg
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: artifacts/package/*.nupkg
+          if-no-files-found: error
+
+  package-smoke:
+    needs: pack
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Download nupkg
+        uses: actions/download-artifact@v4
+        with:
+          name: nupkg
+          path: artifacts/package
+
+      - name: Smoke test (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash scripts/smoke-test.sh artifacts/package/*.nupkg
+
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $nupkg = Get-ChildItem artifacts/package -Filter *.nupkg | Select-Object -First 1
+          ./scripts/smoke-test.ps1 -Nupkg $nupkg.FullName
+
+  release:
+    needs: [native-and-zip, pack, package-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Download zips
+        uses: actions/download-artifact@v4
+        with:
+          pattern: zip-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Download nupkg
+        uses: actions/download-artifact@v4
+        with:
+          name: nupkg
+          path: release-assets
+
+      - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: symdex-skill-${{ matrix.rid }}.zip
+          files: release-assets/*
+
+      - name: Push to nuget.org
+        shell: bash
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          set -eu
+          if [ -z "${NUGET_API_KEY}" ]; then
+            echo "NUGET_API_KEY is not set; skipping nuget.org push."
+            exit 0
+          fi
+          dotnet nuget push release-assets/*.nupkg \
+            --api-key "$NUGET_API_KEY" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate

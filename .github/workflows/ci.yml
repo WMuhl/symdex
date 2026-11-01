@@ -62,3 +62,22 @@ jobs:
         with:
           name: test-results-${{ matrix.os }}
           path: "**/test-results.trx"
+
+  package-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Verify a C toolchain is available (tree-sitter native build)
+        run: cc --version
+
+      - name: Pack
+        run: dotnet pack src/Symdex.Cli/Symdex.Cli.csproj -c Release -o artifacts/package
+
+      - name: Smoke test
+        run: bash scripts/smoke-test.sh artifacts/package/*.nupkg
