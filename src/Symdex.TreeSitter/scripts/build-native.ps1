@@ -10,8 +10,19 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$env:VSCMD_SKIP_SENDTELEMETRY = "1"
 $scriptDir = $PSScriptRoot
 $grammars = Join-Path (Split-Path -Parent $scriptDir) "grammars"
+
+# Start-Process -Wait waits for the whole process tree, and cl.exe can leave a long-lived
+# vctip.exe telemetry child behind, so wait on the compiler process alone.
+function Invoke-Cl {
+    param([string]$ClPath, [string[]]$Arguments)
+    $p = Start-Process -FilePath $ClPath -ArgumentList $Arguments -NoNewWindow -PassThru
+    $null = $p.Handle
+    $p.WaitForExit()
+    return $p.ExitCode
+}
 
 function Import-VcVars {
     param([string]$VcVarsPath)
@@ -79,9 +90,9 @@ try {
         $obj = Join-Path $workDir "obj_$i.obj"
         $incArgs = $s.Inc | ForEach-Object { "/I`"$_`"" }
         $argLine = @("/nologo", "/c", "/std:c11", "/wd4996") + $incArgs + @("/Fo`"$obj`"", "`"$($s.Path)`"")
-        $p = Start-Process -FilePath $cl.Source -ArgumentList $argLine -NoNewWindow -Wait -PassThru
-        if ($p.ExitCode -ne 0) {
-            throw "cl.exe failed compiling $($s.Path) (exit $($p.ExitCode))"
+        $exitCode = Invoke-Cl -ClPath $cl.Source -Arguments $argLine
+        if ($exitCode -ne 0) {
+            throw "cl.exe failed compiling $($s.Path) (exit $exitCode)"
         }
 
         $objs += $obj
@@ -96,9 +107,9 @@ try {
     $defFile = Join-Path $scriptDir "exports.def"
     $dll = Join-Path $OutDir "symdex_treesitter.dll"
     $linkArgs = @("/nologo", "/LD") + ($objs | ForEach-Object { "`"$_`"" }) + @("/Fe:`"$dll`"", "/link", "/DEF:`"$defFile`"")
-    $p = Start-Process -FilePath $cl.Source -ArgumentList $linkArgs -NoNewWindow -Wait -PassThru
-    if ($p.ExitCode -ne 0) {
-        throw "cl.exe link step failed (exit $($p.ExitCode))"
+    $exitCode = Invoke-Cl -ClPath $cl.Source -Arguments $linkArgs
+    if ($exitCode -ne 0) {
+        throw "cl.exe link step failed (exit $exitCode)"
     }
 
     Write-Host "symdex: built native\symdex_treesitter.dll"
