@@ -10,6 +10,10 @@
     <PackageReference Include="System.CommandLine" Version="2.0.14" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Symdex.Tests" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <AssemblyName>symdex</AssemblyName>
