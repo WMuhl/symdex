@@ -14,6 +14,17 @@ internal static class IndexerFactory
 {
     public static Indexer Create() => new([new RoslynFeeder(), new TreeSitterFeeder()]);
 
+    /// <summary>
+    /// An indexer for a long-lived process. The Roslyn feeder keeps its MSBuild workspace
+    /// open and reuses it when a later feed touches the same solution. Dispose the returned
+    /// lifetime to close that workspace.
+    /// </summary>
+    public static (Indexer Indexer, IDisposable Lifetime) CreatePersistent()
+    {
+        var roslyn = new RoslynFeeder { KeepWorkspaceWarm = true };
+        return (new Indexer([roslyn, new TreeSitterFeeder()]), roslyn);
+    }
+
     public static IndexDatabase EnsureFreshAndOpen(string repoRoot, string? solutionPath)
     {
         var db = IndexDatabase.OpenOrCreate(repoRoot);
@@ -24,7 +35,11 @@ internal static class IndexerFactory
     public static void RunAndReport(string repoRoot, IndexDatabase db, string? solutionPath)
     {
         var result = Create().EnsureFresh(repoRoot, db, solutionPath);
+        WriteFreshness(result);
+    }
 
+    public static void WriteFreshness(IndexRunResult result)
+    {
         foreach (var warning in result.Warnings)
         {
             Console.Error.WriteLine(warning);

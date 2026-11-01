@@ -7,17 +7,33 @@ using Symdex.Core.Feeding;
 
 namespace Symdex.Roslyn;
 
+internal readonly record struct OpenResult(MSBuildWorkspace? Workspace, Solution? Solution, FeederResult? Failure);
+
 internal static class RoslynWorkspaceIndexer
 {
     public static FeederResult Feed(FeedRequest request)
     {
+        var opened = TryOpen(request);
+        if (opened.Failure is not null)
+        {
+            return opened.Failure;
+        }
+
+        using (opened.Workspace)
+        {
+            return Index(opened.Solution!, request);
+        }
+    }
+
+    internal static OpenResult TryOpen(FeedRequest request)
+    {
         var solutionPath = SolutionResolver.Resolve(request.RepoRoot, request.SolutionPath, out var resolveWarning);
         if (solutionPath is null)
         {
-            return Fail(resolveWarning ?? "symdex: could not resolve a .sln/.csproj.");
+            return new OpenResult(null, null, Fail(resolveWarning ?? "symdex: could not resolve a .sln/.csproj."));
         }
 
-        using var workspace = MSBuildWorkspace.Create();
+        var workspace = MSBuildWorkspace.Create();
         var failures = new List<string>();
         workspace.RegisterWorkspaceFailedHandler(e =>
         {
@@ -36,14 +52,21 @@ internal static class RoslynWorkspaceIndexer
         }
         catch (Exception ex)
         {
-            return Fail($"symdex: failed to open '{Path.GetFileName(solutionPath)}' ({ex.Message}).");
+            workspace.Dispose();
+            return new OpenResult(null, null, Fail($"symdex: failed to open '{Path.GetFileName(solutionPath)}' ({ex.Message})."));
         }
 
         if (failures.Count > 0)
         {
-            return Fail($"symdex: workspace load reported {failures.Count} failure(s) (e.g. \"{failures[0]}\").");
+            workspace.Dispose();
+            return new OpenResult(null, null, Fail($"symdex: workspace load reported {failures.Count} failure(s) (e.g. \"{failures[0]}\")."));
         }
 
+        return new OpenResult(workspace, solution, null);
+    }
+
+    internal static FeederResult Index(Solution solution, FeedRequest request)
+    {
         var documentsByPath = solution.Projects
             .SelectMany(p => p.Documents)
             .Where(d => d.FilePath is not null)
@@ -172,6 +195,9 @@ internal static class RoslynWorkspaceIndexer
         }
     }
 
+    internal static FeederResult Fail(string warning) =>
+        new(false, warning, new Dictionary<string, FileFeedResult>());
+
     private static ISymbol? DeclaredSymbolFor(SyntaxNode node, SemanticModel model) => node switch
     {
         BaseTypeDeclarationSyntax t => model.GetDeclaredSymbol(t),
@@ -199,7 +225,4 @@ internal static class RoslynWorkspaceIndexer
     }
 
     private static string NormalizePath(string path) => Path.GetFullPath(path);
-
-    private static FeederResult Fail(string warning) =>
-        new(false, warning, new Dictionary<string, FileFeedResult>());
 }
