@@ -89,9 +89,9 @@
             "src/Humanizer/Localisation/Formatters/IFormatter.cs:12",
             "src/Humanizer/Localisation/Formatters/IFormatter.cs:17",
             "src/Humanizer/Localisation/Formatters/IFormatter.cs:23",
-            "src/Humanizer/Localisation/Formatters/IFormatter.cs:27",
+            "src/Humanizer/Localisation/Formatters/IFormatter.cs:28",
             "src/Humanizer/Localisation/Formatters/IFormatter.cs:35",
-            "src/Humanizer/Localisation/Formatters/IFormatter.cs:43",
+            "src/Humanizer/Localisation/Formatters/IFormatter.cs:44",
             "src/Humanizer/Localisation/Formatters/IFormatter.cs:51"
           ],
           "notes": "Interface and its methods. Lines are the declaration lines, not the doc comments above them."
