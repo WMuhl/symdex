@@ -81,7 +81,8 @@ function Get-LineByteRanges {
         }
     }
     if ($start -lt $Bytes.Length) {
-        $ranges.Add(@($start, $Bytes.Length - 1))
+        $endByte = $Bytes.Length - 1
+        $ranges.Add(@($start, $endByte))
     }
     return ,$ranges
 }
