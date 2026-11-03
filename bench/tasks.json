@@ -8,7 +8,7 @@
     "tokenDivisor": 4,
     "output": "json"
   },
-  "scoring": "Expected locations are the answer to the natural-language question (file:line, repo-relative, forward slashes), not the rows a tool's matcher is specified to emit. Symdex predictions are the unique file:startLine (find/outline) or file:line (refs/callers) values in the JSON it prints at --limit 50. Identical spans are read once. The first 20 distinct spans are read, each capped at 12 lines, overlapping spans in a file are merged for byte counts, and tool calls are 1 plus the merged span count. Grep predictions are the unique file:line hits from `git grep -n -I -F -- <term>` over the whole clone. The baseline then reads, in full, every distinct file among the first 5 hits. Outline questions use a full-file read instead of grep: recall is how many expected lines sit in that file, and precision is null because the read does not extract locations. Tokens are bytes/4. A symdex: stderr line on the C# cold run means Roslyn fell back.",
+  "scoring": "Expected locations are the answer to the natural-language question (file:line, repo-relative, forward slashes), not the rows a tool's matcher is specified to emit. Symdex predictions are the unique file:startLine (find/outline) or file:line (refs/callers) values in the JSON it prints at --limit 50. Identical spans are read once. The first 20 distinct spans are read, each capped at 12 lines, overlapping spans in a file are merged for byte counts, and tool calls are 1 plus the merged span count. Grep predictions are the unique file:line hits from `git grep -n -I -F -- <term>` over the whole clone. The baseline then reads, in full, every distinct file among the first 5 hits. Outline questions use a full-file read instead of grep: recall is how many expected lines sit in that file, and precision is null because the read does not extract locations. Tokens are bytes/4. A symdex: stderr line on the C# cold run means Roslyn fell back, except a line that only reports an auto-discovered solution (`symdex: using '...'`). The humanizer-autosln block is supplementary and is not included in the 22-question overall.",
   "targets": [
     {
       "id": "humanizer",
@@ -27,6 +27,13 @@
         "verb": "refs",
         "args": ["ITruncator"],
         "watchFile": "src/Humanizer/TruncateExtensions.cs"
+      },
+      "supplementary": {
+        "id": "humanizer-autosln",
+        "label": "Same Humanizer commit and questions, no --solution. Prep is dotnet restore src/Humanizer.slnx. Symdex auto-discovers that solution, which includes test projects. Not part of the 22-question overall.",
+        "prep": [
+          { "file": "dotnet", "args": ["restore", "src/Humanizer.slnx"] }
+        ]
       },
       "questions": [
         {
@@ -298,11 +305,12 @@
           "baseline": "grep",
           "grep": "ZodMiniISODuration",
           "expected": [
+            "packages/zod/src/v4/mini/iso.ts:56",
             "packages/zod/src/v4/mini/iso.ts:64",
             "packages/zod/src/v4/mini/iso.ts:65",
             "packages/zod/src/v4/mini/external.ts:48"
           ],
-          "notes": "Return type, constructor argument, and the re-export. The string literal on iso.ts:57 is not an identifier. Declarations on lines 53 and 56 are not references."
+          "notes": "Line 56 is `export const ZodMiniISODuration: core.$constructor<ZodMiniISODuration>`. The const name is a declaration; the type argument on the same line is a reference, and scoring is per line, so the line counts. Line 64 is the return type, line 65 the constructor argument, external.ts:48 the re-export. The string literal on iso.ts:57 is not an identifier. The interface declaration on line 53 is not a reference."
         },
         {
           "id": "callers-iso-duration-helper",

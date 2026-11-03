@@ -295,6 +295,8 @@ function Invoke-SymdexQuery {
     Invoke-Captured $Symdex $argList.ToArray() $Repo
 }
 
+. (Join-Path $PSScriptRoot 'Measure-QuestionSet.ps1')
+
 $commit = (Invoke-Captured 'git' @('rev-parse', 'HEAD') $RepoRoot).Stdout.Trim()
 $machine = Get-MachineInfo
 if (Test-Path $WorkRoot) { Remove-Item -Recurse -Force $WorkRoot }
@@ -353,155 +355,9 @@ foreach ($target in @($tasks.targets)) {
 
         $prefix = @($target.symdexArgs)
         $limit = [int]$rules.limit
-        $questionsOut = [System.Collections.Generic.List[object]]::new()
-        $coldDone = $false
-
-        foreach ($question in @($target.questions)) {
-            Write-Host "  $($question.id)"
-            $qArgs = @($question.args)
-            $defaultFile = $question.file
-            if (-not $coldDone) {
-                $cold = Invoke-SymdexQuery $dest $prefix $limit $question.verb $qArgs
-                $coldDone = $true
-                $entry.cold = [ordered]@{
-                    question = $question.id
-                    elapsedMs = $cold.ElapsedMs
-                    exitCode = $cold.ExitCode
-                    stderr = $cold.Stderr.Trim()
-                    reindexedFiles = $null
-                    warnings = @()
-                    indexBytes = (Get-IndexBytes $dest)
-                }
-                if ($cold.Stderr -match 'reindexed (\d+) files') { $entry.cold.reindexedFiles = [int]$Matches[1] }
-                $warns = [System.Collections.Generic.List[string]]::new()
-                foreach ($errLine in ($cold.Stderr -split "`r?`n")) {
-                    if ($errLine.TrimStart().StartsWith('symdex:')) { $warns.Add($errLine.Trim()) }
-                }
-                $entry.cold.warnings = @($warns)
-                $entry.cold.roslynFallback = @($warns).Count -gt 0 -and $target.language -eq 'csharp'
-            }
-
-            $warm = @()
-            $last = $null
-            for ($i = 0; $i -lt [int]$rules.warmRuns; $i++) {
-                $last = Invoke-SymdexQuery $dest $prefix $limit $question.verb $qArgs
-                $warm += [long]$last.ElapsedMs
-            }
-            $parsed = Get-SymdexHits $last.Stdout $defaultFile
-            $pred = [System.Collections.Generic.List[string]]::new()
-            foreach ($hit in $parsed.Hits) { [void]$pred.Add("$($hit.File):$($hit.Start)") }
-            $uniquePred = @($pred | Sort-Object -Unique)
-            $chosen = Get-ChosenSpans $parsed.Hits ([int]$rules.spanCapLines) ([int]$rules.maxSpans)
-            $merged = Merge-Spans $chosen
-            $spanBytes = Get-SpanBytes $dest $merged
-            $stdoutBytes = [long]($utf8.GetByteCount($last.Stdout))
-            $symScore = Get-Score $uniquePred @($question.expected)
-            $warmReindexed = $last.Stderr -match 'reindexed \d+ files'
-
-            $base = [ordered]@{
-                kind = $question.baseline
-                toolCalls = $null
-                outputBytes = 0
-                fileBytes = 0
-                totalBytes = 0
-                approxTokens = 0
-                elapsedMs = $null
-                precision = $null
-                recall = $null
-                predictedCount = $null
-                filesOpened = @()
-            }
-            if ($question.baseline -eq 'read') {
-                $path = Join-Path $dest (($question.file -replace '/', [IO.Path]::DirectorySeparatorChar))
-                $fileBytes = [long](Get-Item $path).Length
-                $base.toolCalls = 1
-                $base.fileBytes = $fileBytes
-                $base.totalBytes = $fileBytes
-                $base.approxTokens = [math]::Round($fileBytes / [double]$rules.tokenDivisor, 1)
-                $covered = 0
-                foreach ($exp in @($question.expected)) {
-                    if ($exp.StartsWith("$($question.file):")) { $covered++ }
-                }
-                $expCount = @($question.expected).Count
-                $base.recall = $(if ($expCount -eq 0) { 1.0 } else { $covered / $expCount })
-                $base.precision = $null
-                $base.predictedCount = $null
-                $base.filesOpened = @($question.file)
-                $base.note = 'full-file read; no extracted locations, so precision is undefined'
-            } else {
-                $grep = Get-GrepHits $dest $question.grep
-                $files = [System.Collections.Generic.List[string]]::new()
-                $seenFiles = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-                foreach ($hit in $grep.Hits) {
-                    if ($seenFiles.Add($hit.File)) { $files.Add($hit.File) }
-                }
-                $open = @($files | Select-Object -First ([int]$rules.grepK))
-                $fileBytes = [long]0
-                foreach ($rel in $open) {
-                    $path = Join-Path $dest ($rel -replace '/', [IO.Path]::DirectorySeparatorChar)
-                    if (Test-Path $path) { $fileBytes += [long](Get-Item $path).Length }
-                }
-                $grepPred = [System.Collections.Generic.List[string]]::new()
-                foreach ($hit in $grep.Hits) { [void]$grepPred.Add("$($hit.File):$($hit.Line)") }
-                $grepScore = Get-Score @($grepPred | Sort-Object -Unique) @($question.expected)
-                $outBytes = [long]($utf8.GetByteCount($grep.Stdout))
-                $base.toolCalls = 1 + $open.Count
-                $base.outputBytes = $outBytes
-                $base.fileBytes = $fileBytes
-                $base.totalBytes = $outBytes + $fileBytes
-                $base.approxTokens = [math]::Round(($outBytes + $fileBytes) / [double]$rules.tokenDivisor, 1)
-                $base.elapsedMs = $grep.ElapsedMs
-                $base.precision = $grepScore.Precision
-                $base.recall = $grepScore.Recall
-                $base.predictedCount = $grepScore.PredictedCount
-                $base.tp = $grepScore.Tp
-                $base.fp = $grepScore.Fp
-                $base.fn = $grepScore.Fn
-                $base.falseNegatives = @($grepScore.FalseNegatives)
-                $base.falsePositives = @($grepScore.FalsePositives)
-                $base.filesOpened = @($open)
-                $base.grepHitCount = $grep.Hits.Count
-            }
-
-            $symTotal = $stdoutBytes + $spanBytes
-            $ratio = $null
-            if ($base.totalBytes -gt 0) { $ratio = [math]::Round($symTotal / $base.totalBytes, 4) }
-            $questionsOut.Add([ordered]@{
-                id = $question.id
-                ask = $question.ask
-                verb = $question.verb
-                args = @($qArgs)
-                notes = $question.notes
-                expectedCount = @($question.expected).Count
-                warmMs = @($warm)
-                warmMedianMs = (Get-MedianMs $warm)
-                warmReindexed = [bool]$warmReindexed
-                exitCode = $last.ExitCode
-                truncated = [bool]$parsed.Truncated
-                ambiguous = [bool]$parsed.Ambiguous
-                rawLocations = $parsed.Hits.Count
-                uniqueLocations = $uniquePred.Count
-                symdex = [ordered]@{
-                    stdoutBytes = $stdoutBytes
-                    spanBytes = $spanBytes
-                    totalBytes = $symTotal
-                    approxTokens = [math]::Round($symTotal / [double]$rules.tokenDivisor, 1)
-                    toolCalls = 1 + @($merged).Count
-                    spansRead = @($merged).Count
-                    precision = $symScore.Precision
-                    recall = $symScore.Recall
-                    tp = $symScore.Tp
-                    fp = $symScore.Fp
-                    fn = $symScore.Fn
-                    falseNegatives = @($symScore.FalseNegatives)
-                    falsePositives = @($symScore.FalsePositives)
-                    duplicateFactor = $(if ($uniquePred.Count -gt 0) { [math]::Round($parsed.Hits.Count / $uniquePred.Count, 2) } else { $null })
-                }
-                baseline = $base
-                contextRatio = $ratio
-            })
-        }
-
+        $measured = Measure-QuestionSet -Dest $dest -Prefix $prefix -Questions @($target.questions) -Language $target.language
+        $entry.cold = $measured.Cold
+        $questionsOut = $measured.Questions
         $incr = $target.incremental
         $before = Invoke-SymdexQuery $dest $prefix $limit $incr.verb @($incr.args)
         $beforeHits = Get-SymdexHits $before.Stdout $null
@@ -526,6 +382,70 @@ foreach ($target in @($tasks.targets)) {
         if ($after.Stderr -match 'reindexed (\d+) files') { $entry.incremental.reindexedFiles = [int]$Matches[1] }
 
         $entry.questions = @($questionsOut)
+
+        if ($target.supplementary) {
+          try {
+            $sup = $target.supplementary
+            Write-Host "=== $($sup.id) (supplementary, not in overall) ==="
+            $reset = Invoke-Captured 'git' @('-C', $dest, 'checkout', '--', '.') $WorkRoot
+            if ($reset.ExitCode -ne 0) { throw "supplementary reset failed: $($reset.Stderr)" }
+            $supIndex = Join-Path $dest '.index'
+            if (Test-Path $supIndex) { Remove-Item -Recurse -Force $supIndex }
+            $supPrep = [System.Collections.Generic.List[object]]::new()
+            foreach ($step in @($sup.prep)) {
+                if (-not $step) { continue }
+                $prep = Invoke-Captured $step.file @($step.args) $dest
+                $tail = $prep.Stderr.Trim()
+                if ($tail.Length -gt 500) { $tail = $tail.Substring($tail.Length - 500) }
+                $supPrep.Add([ordered]@{
+                    file = $step.file
+                    args = @($step.args)
+                    exitCode = $prep.ExitCode
+                    elapsedMs = $prep.ElapsedMs
+                    stderrTail = $tail
+                })
+                if ($prep.ExitCode -ne 0) { throw "supplementary prep failed: $($step.file) $($step.args -join ' ')" }
+            }
+            $supPrefix = @($sup.symdexArgs)
+            $supMeasured = Measure-QuestionSet -Dest $dest -Prefix $supPrefix -Questions @($target.questions) -Language $target.language
+            $supBefore = Invoke-SymdexQuery $dest $supPrefix $limit $incr.verb @($incr.args)
+            $supBeforeHits = Get-SymdexHits $supBefore.Stdout $null
+            $supBeforeLines = @($supBeforeHits.Hits | Where-Object { $_.File -eq $incr.watchFile } | ForEach-Object { $_.Start } | Sort-Object -Unique)
+            [IO.File]::AppendAllText($touchPath, "`n")
+            $supAfter = Invoke-SymdexQuery $dest $supPrefix $limit $incr.verb @($incr.args)
+            $supAfterHits = Get-SymdexHits $supAfter.Stdout $null
+            $supAfterLines = @($supAfterHits.Hits | Where-Object { $_.File -eq $incr.watchFile } | ForEach-Object { $_.Start } | Sort-Object -Unique)
+            $supIncr = [ordered]@{
+                touch = $incr.touch
+                verb = $incr.verb
+                args = @($incr.args)
+                watchFile = $incr.watchFile
+                elapsedMs = $supAfter.ElapsedMs
+                stderr = $supAfter.Stderr.Trim()
+                reindexedFiles = $null
+                linesBefore = @($supBeforeLines)
+                linesAfter = @($supAfterLines)
+                watchedLinesDropped = (@($supBeforeLines).Count -gt 0 -and @($supAfterLines).Count -eq 0)
+            }
+            if ($supAfter.Stderr -match 'reindexed (\d+) files') { $supIncr.reindexedFiles = [int]$Matches[1] }
+            $entry.supplementary = [ordered]@{
+                id = $sup.id
+                label = $sup.label
+                note = 'Same questions and ground truth as humanizer. Excluded from overall.'
+                prep = @($supPrep)
+                cold = $supMeasured.Cold
+                questions = @($supMeasured.Questions)
+                incremental = $supIncr
+            }
+          } catch {
+            $failed = $true
+            $entry.supplementary = [ordered]@{
+                id = $target.supplementary.id
+                error = "$_"
+            }
+            Write-Host "  SUPPLEMENTARY ERROR: $_"
+          }
+        }
     } catch {
         $failed = $true
         $entry.error = "$_"
@@ -576,6 +496,37 @@ foreach ($row in $summary) {
     $grandBase += [long]$row.baselineBytes
 }
 
+$supplementarySummary = [System.Collections.Generic.List[object]]::new()
+foreach ($target in @($targetResults | Where-Object { $_.supplementary -and -not $_.supplementary.error })) {
+    $qs = @($target.supplementary.questions)
+    $symBytes = [long]0
+    $baseBytes = [long]0
+    foreach ($q in $qs) {
+        $symBytes += [long]$q.symdex.totalBytes
+        $baseBytes += [long]$q.baseline.totalBytes
+    }
+    $supplementarySummary.Add([ordered]@{
+        id = $target.supplementary.id
+        label = $target.supplementary.label
+        questions = $qs.Count
+        coldMs = $target.supplementary.cold.elapsedMs
+        indexBytes = $target.supplementary.cold.indexBytes
+        reindexedFiles = $target.supplementary.cold.reindexedFiles
+        roslynFallback = $target.supplementary.cold.roslynFallback
+        warnings = @($target.supplementary.cold.warnings)
+        symdexBytes = $symBytes
+        baselineBytes = $baseBytes
+        contextRatio = $(if ($baseBytes -gt 0) { [math]::Round($symBytes / $baseBytes, 4) } else { $null })
+        symdexPrecision = (Get-Mean ($qs | ForEach-Object { $_.symdex.precision }))
+        symdexRecall = (Get-Mean ($qs | ForEach-Object { $_.symdex.recall }))
+        baselinePrecision = (Get-Mean ($qs | ForEach-Object { $_.baseline.precision }))
+        baselineRecall = (Get-Mean ($qs | ForEach-Object { $_.baseline.recall }))
+        warmMedianMs = $(if ($qs.Count -gt 0) { Get-MedianMs @($qs | ForEach-Object { [long]$_.warmMedianMs }) } else { $null })
+        incrementalMs = $target.supplementary.incremental.elapsedMs
+        watchedLinesDropped = $target.supplementary.incremental.watchedLinesDropped
+    })
+}
+
 $results = [ordered]@{
     date = $Date
     symdexCommit = $commit
@@ -594,6 +545,7 @@ $results = [ordered]@{
         baselineRecall = (Get-Mean ($allQuestions | ForEach-Object { $_.baseline.recall }))
         questionCount = @($allQuestions).Count
     }
+    supplementary = @($supplementarySummary)
     targets = @($targetResults)
 }
 
@@ -613,5 +565,13 @@ Write-Host ('OVERALL sym={0} base={1} ratio={2} P={3} R={4} baseP={5} baseR={6} 
     $results.overall.symdexBytes, $results.overall.baselineBytes, $results.overall.contextRatio, `
     $results.overall.symdexPrecision, $results.overall.symdexRecall, `
     $results.overall.baselinePrecision, $results.overall.baselineRecall, $results.overall.questionCount)
+if ($supplementarySummary.Count -gt 0) {
+    Write-Host 'SUPPLEMENTARY (not in OVERALL)'
+    foreach ($row in $supplementarySummary) {
+        Write-Host ('{0,-14} {1,8} {2,9} {3,10} {4,11} {5,6:N2} {6} {7} {8} {9}' -f `
+            $row.id, $row.coldMs, [int]($row.indexBytes / 1KB), $row.symdexBytes, $row.baselineBytes, $row.contextRatio, `
+            (& $p $row.symdexPrecision), (& $p $row.symdexRecall), (& $p $row.baselinePrecision), (& $p $row.baselineRecall))
+    }
+}
 Write-Host "wrote $ResultsPath"
 if ($failed) { exit 1 }
