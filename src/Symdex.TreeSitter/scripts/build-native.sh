@@ -66,4 +66,4 @@ mkdir -p "$OUT_DIR"
 # shellcheck disable=SC2086
 "$CC" $SHARED_FLAG -o "$OUT_DIR/libsymdex_treesitter.$EXT" $OBJS
 
-echo "symdex: built native/libsymdex_treesitter.$EXT"
+echo "symdex: built $OUT_DIR/libsymdex_treesitter.$EXT"

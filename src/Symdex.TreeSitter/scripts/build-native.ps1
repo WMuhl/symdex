@@ -112,7 +112,7 @@ try {
         throw "cl.exe link step failed (exit $exitCode)"
     }
 
-    Write-Host "symdex: built native\symdex_treesitter.dll"
+    Write-Host "symdex: built $dll"
 }
 finally {
     Remove-Item -Recurse -Force $workDir -ErrorAction SilentlyContinue

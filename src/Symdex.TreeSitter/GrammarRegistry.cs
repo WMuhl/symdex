@@ -9,7 +9,7 @@ internal sealed record Grammar(IntPtr Language, TsQuery Query, IReadOnlyList<str
 /// <summary>
 /// Maps a file extension to the compiled tree-sitter grammar (language + query + per-pattern kind
 /// list) used to index it. ".js"/".jsx" reuse the typescript/tsx grammars since no separate
-/// tree-sitter-javascript grammar is vendored (see README "Design decisions"). ".py"/".pyi"
+/// tree-sitter-javascript grammar is vendored (see docs/design-decisions.md). ".py"/".pyi"
 /// share the python grammar.
 /// </summary>
 internal static class GrammarRegistry
