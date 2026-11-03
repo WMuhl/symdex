@@ -50,7 +50,7 @@ internal static class IndexQueries
 
     public static OutlineToolResult Outline(IndexDatabase db, string repoRoot, string path, int? limit)
     {
-        var relative = PathUtil.ToRepoRelative(repoRoot, path);
+        var relative = PathUtil.ToRepoRelative(repoRoot, path, baseDirectory: repoRoot);
         var page = PageOf(db.Outline(relative), limit);
         var results = page.Results
             .Select(s => new OutlineSymbol(s.Kind, s.Name, s.Signature, s.StartLine, s.EndLine))
