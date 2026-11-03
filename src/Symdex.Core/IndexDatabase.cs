@@ -178,20 +178,27 @@ public sealed class IndexDatabase : IDisposable
     {
         using var cmd = _connection.CreateCommand();
         var kindFilter = kind is null ? "" : "AND s.kind = $kind ";
+        var ftsQuery = EscapeFtsQuery(query);
+        var ftsClause = ftsQuery is null
+            ? ""
+            : "OR s.id IN (SELECT rowid FROM symbols_fts WHERE symbols_fts MATCH $ftsQuery)";
         cmd.CommandText = $"""
             SELECT s.id, s.name, s.fqname, s.kind, s.signature, s.doc, f.path, s.start_line, s.end_line, s.container
             FROM symbols s
             JOIN files f ON f.id = s.file_id
-            WHERE (s.name LIKE $like OR s.fqname LIKE $like OR s.id IN (
-                SELECT rowid FROM symbols_fts WHERE symbols_fts MATCH $ftsQuery
-            ))
+            WHERE (s.name LIKE $like ESCAPE '\' OR s.fqname LIKE $like ESCAPE '\'
+                {ftsClause})
             {kindFilter}
             ORDER BY f.path, s.start_line
             LIMIT $limit;
             """;
-        cmd.Parameters.AddWithValue("$like", $"%{query}%");
-        cmd.Parameters.AddWithValue("$ftsQuery", EscapeFtsQuery(query));
+        cmd.Parameters.AddWithValue("$like", $"%{EscapeLike(query)}%");
         cmd.Parameters.AddWithValue("$limit", limit + 1); // fetch one extra to detect truncation
+        if (ftsQuery is not null)
+        {
+            cmd.Parameters.AddWithValue("$ftsQuery", ftsQuery);
+        }
+
         if (kind is not null)
         {
             cmd.Parameters.AddWithValue("$kind", kind);
@@ -319,10 +326,19 @@ public sealed class IndexDatabase : IDisposable
         return results;
     }
 
-    private static string EscapeFtsQuery(string query)
+    private static string EscapeLike(string text) =>
+        text.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+
+    // Null when FTS cannot treat the query as a literal phrase: LIKE metacharacters, and
+    // FTS operators (*, -, :, parentheses). The tokenizer drops them, so "a%b" is the phrase
+    // a b and "_processor" is the prefix processor. LIKE matches those queries literally.
+    private static string? EscapeFtsQuery(string query)
     {
-        // Treat the query as a literal phrase so punctuation in symbol names (e.g. "Foo.Bar")
-        // doesn't get parsed as FTS5 query syntax.
+        if (query.IndexOfAny(['\\', '%', '_', '*', '-', ':', '(', ')']) >= 0)
+        {
+            return null;
+        }
+
         var escaped = query.Replace("\"", "\"\"");
         return $"\"{escaped}\"*";
     }

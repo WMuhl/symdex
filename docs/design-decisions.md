@@ -44,7 +44,7 @@ Resolution tries an exact `fqname` match first. If that hits, the short-name loo
 
 ## `find` uses both LIKE and FTS
 
-`find` unions a `LIKE '%query%'` match on `name` and `fqname` with an FTS5 prefix-phrase match on `name`, `fqname`, and `doc`. The substring match is what makes `helper` return `typed_helper`. The full-text index is what makes `payments` return a symbol whose doc comment contains that word. The FTS query is wrapped as a quoted phrase with a trailing `*`, so punctuation in a name such as `Foo.Bar` is not read as FTS syntax. Doc comments are not part of the LIKE clause.
+`find` unions a `LIKE '%query%' ESCAPE '\'` match on `name` and `fqname` with an FTS5 prefix-phrase match on `name`, `fqname`, and `doc`. `\`, `%`, and `_` in the query are escaped, so `find _isoDuration` does not treat `_` as "one character" and `find a%b` does not treat `%` as "any sequence". The substring match is what makes `helper` return `typed_helper`. The full-text index is what makes `payments` return a symbol whose doc comment contains that word. The FTS query is a quoted phrase with a trailing `*`. A quote in the query is doubled, so it is not a string delimiter. `*`, `-`, `:`, and parentheses are FTS operators, and the tokenizer also drops `%`, `_`, and `\`, which would turn `_processor` into a prefix search for `processor` and `a%b` into the phrase `a` `b`. A query containing any of those characters is answered by the LIKE clause only. A symbol that matches both the LIKE clause and the FTS clause is one row; the two sides are `OR`ed inside one `SELECT`, not `UNION ALL`. Doc comments are not part of the LIKE clause.
 
 ## `.js` and `.jsx` use the TypeScript grammars
 

@@ -70,6 +70,30 @@ public sealed class McpServerTests(McpSessionFixture fixture) : IClassFixture<Mc
     }
 
     [Fact]
+    public async Task Find_treats_like_metacharacters_as_literals()
+    {
+        var underscore = await McpTestSupport.CallAsync(fixture.Client, "symdex_find", new Dictionary<string, object>
+        {
+            ["query"] = "_processor",
+        });
+        var underscoreHits = underscore.GetProperty("results").EnumerateArray().ToList();
+        Assert.NotEmpty(underscoreHits);
+        Assert.All(underscoreHits, symbol => Assert.Contains("_processor", symbol.GetProperty("fqName").GetString()));
+
+        var percent = await McpTestSupport.CallAsync(fixture.Client, "symdex_find", new Dictionary<string, object>
+        {
+            ["query"] = "a%b",
+        });
+        Assert.Empty(percent.GetProperty("results").EnumerateArray());
+
+        var starred = await McpTestSupport.CallAsync(fixture.Client, "symdex_find", new Dictionary<string, object>
+        {
+            ["query"] = "Charge(decimal)",
+        });
+        Assert.Empty(starred.GetProperty("results").EnumerateArray());
+    }
+
+    [Fact]
     public async Task Refs_finds_implementation_and_usage_sites()
     {
         var result = await McpTestSupport.CallAsync(fixture.Client, "symdex_refs", new Dictionary<string, object>
