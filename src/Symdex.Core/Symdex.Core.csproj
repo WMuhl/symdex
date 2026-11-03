@@ -2,4 +2,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="symdex" />
+    <InternalsVisibleTo Include="Symdex.Tests" />
+  </ItemGroup>
 </Project>

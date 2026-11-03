@@ -271,20 +271,27 @@ public sealed class IndexDatabase : IDisposable
     {
         using var cmd = _connection.CreateCommand();
         var kindFilter = kind is null ? "" : "AND s.kind = $kind ";
+        var ftsQuery = EscapeFtsQuery(query);
+        var ftsClause = ftsQuery is null
+            ? ""
+            : "OR s.id IN (SELECT rowid FROM symbols_fts WHERE symbols_fts MATCH $ftsQuery)";
         cmd.CommandText = $"""
             SELECT s.id, s.name, s.fqname, s.kind, s.signature, s.doc, f.path, s.start_line, s.end_line, s.container
             FROM symbols s
             JOIN files f ON f.id = s.file_id
-            WHERE (s.name LIKE $like OR s.fqname LIKE $like OR s.id IN (
-                SELECT rowid FROM symbols_fts WHERE symbols_fts MATCH $ftsQuery
-            ))
+            WHERE (s.name LIKE $like ESCAPE '\' OR s.fqname LIKE $like ESCAPE '\'
+                {ftsClause})
             {kindFilter}
             ORDER BY f.path, s.start_line
             LIMIT $limit;
             """;
-        cmd.Parameters.AddWithValue("$like", $"%{query}%");
-        cmd.Parameters.AddWithValue("$ftsQuery", EscapeFtsQuery(query));
+        cmd.Parameters.AddWithValue("$like", $"%{EscapeLike(query)}%");
         cmd.Parameters.AddWithValue("$limit", limit + 1); // fetch one extra to detect truncation
+        if (ftsQuery is not null)
+        {
+            cmd.Parameters.AddWithValue("$ftsQuery", ftsQuery);
+        }
+
         if (kind is not null)
         {
             cmd.Parameters.AddWithValue("$kind", kind);
@@ -294,8 +301,10 @@ public sealed class IndexDatabase : IDisposable
     }
 
     /// <summary>
-    /// Distinct symbol keys for a query. An exact <c>fqname</c> match wins over <c>name</c>;
-    /// otherwise the distinct fqnames (or names, when fqname is null) of symbols with that name.
+    /// Distinct symbol keys for a query. An exact <c>fqname</c> match wins.
+    /// Otherwise the keys are the exact <c>name</c> matches plus, for a qualified C# query,
+    /// dotted-suffix matches of the fqname with its return type removed. Parameters on that
+    /// form are optional. Tree-sitter rows have a null <c>fqname</c> and match by name only.
     /// </summary>
     public IReadOnlyList<string> ResolveSymbolCandidates(string? nameOrFqName)
     {
@@ -315,12 +324,41 @@ public sealed class IndexDatabase : IDisposable
             return byFqName;
         }
 
-        return ReadKeys("""
-            SELECT DISTINCT COALESCE(fqname, name) AS key
+        var simple = SymbolNames.SimpleName(nameOrFqName);
+        var qualified = SymbolNames.IsQualifiedQuery(nameOrFqName);
+        var keys = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var (name, fqname) in ReadResolutionRows(nameOrFqName, simple, qualified))
+        {
+            if (string.Equals(name, nameOrFqName, StringComparison.Ordinal)
+                || (qualified && SymbolNames.Matches(nameOrFqName, fqname)))
+            {
+                keys.Add(fqname ?? name);
+            }
+        }
+
+        return keys.ToArray();
+    }
+
+    private List<(string Name, string? FqName)> ReadResolutionRows(string exact, string simple, bool includeConstructors)
+    {
+        using var cmd = _connection.CreateCommand();
+        var ctorClause = includeConstructors ? "OR name = '.ctor'" : "";
+        cmd.CommandText = $"""
+            SELECT DISTINCT name, fqname
             FROM symbols
-            WHERE name = $exact
-            ORDER BY key;
-            """, nameOrFqName);
+            WHERE name = $exact OR name = $simple
+            {ctorClause};
+            """;
+        cmd.Parameters.AddWithValue("$exact", exact);
+        cmd.Parameters.AddWithValue("$simple", simple);
+        var results = new List<(string Name, string? FqName)>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            results.Add((reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1)));
+        }
+
+        return results;
     }
 
     private List<string> ReadKeys(string sql, string exact)
@@ -412,10 +450,19 @@ public sealed class IndexDatabase : IDisposable
         return results;
     }
 
-    private static string EscapeFtsQuery(string query)
+    private static string EscapeLike(string text) =>
+        text.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+
+    // Null when FTS cannot treat the query as a literal phrase: LIKE metacharacters, and
+    // FTS operators (*, -, :, parentheses). The tokenizer drops them, so "a%b" is the phrase
+    // a b and "_processor" is the prefix processor. LIKE matches those queries literally.
+    private static string? EscapeFtsQuery(string query)
     {
-        // Treat the query as a literal phrase so punctuation in symbol names (e.g. "Foo.Bar")
-        // doesn't get parsed as FTS5 query syntax.
+        if (query.IndexOfAny(['\\', '%', '_', '*', '-', ':', '(', ')']) >= 0)
+        {
+            return null;
+        }
+
         var escaped = query.Replace("\"", "\"\"");
         return $"\"{escaped}\"*";
     }

@@ -63,16 +63,28 @@ call csharp/SampleLib/CheckoutService.cs:17
 ## Ambiguous names
 
 If a plain name matches more than one symbol, `refs`/`callers` print the candidates and exit with
-code 2. Re-run with one candidate copied exactly - for C# methods the fully-qualified name
-includes the return type and parameter types, and a shortened form such as
-`SampleLib.IPaymentProcessor.Charge` matches nothing.
+code 2. Re-run with one candidate copied exactly. For C# you can also pass the qualified name
+without the return type. Parameters are optional, and a parameter type may be a keyword (`decimal`)
+or a dotted suffix (`Decimal`). The match stops at a dot, so `Processor.Charge` does not match
+`PaymentProcessor.Charge`.
 
 ```
+$ symdex callers IPaymentProcessor.Charge
+System.Decimal SampleLib.IPaymentProcessor.Charge(System.Decimal)
+call csharp/SampleLib/CheckoutService.cs:17
+
+$ symdex callers 'PaymentProcessor.Charge(decimal)'
+System.Decimal SampleLib.PaymentProcessor.Charge(System.Decimal)
+call csharp/SampleLib/CheckoutService.cs:17
+
 $ symdex callers Charge
 ambiguous symbol 'Charge', candidates:
   System.Decimal SampleLib.IPaymentProcessor.Charge(System.Decimal)
   System.Decimal SampleLib.PaymentProcessor.Charge(System.Decimal)
 ```
+
+A query that matches nothing prints a stderr hint (`symdex find` plus the last segment of the
+query) and exits 0.
 
 ## Precision differs by language
 

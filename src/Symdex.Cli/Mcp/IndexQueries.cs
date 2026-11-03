@@ -98,7 +98,7 @@ internal static class IndexQueries
                     Results = [],
                     Truncated = false,
                     More = 0,
-                    Message = $"No symbol matched '{symbol}'.",
+                    Message = $"No symbol matched '{symbol}'. Try symdex find {SymbolNames.FindHintSegment(symbol)}.",
                 };
             case ResolveOutcome.Ambiguous:
                 return new RefToolResult

@@ -11,7 +11,7 @@ internal static class RefsCommand
         switch (resolution.Outcome)
         {
             case ResolveOutcome.NotFound:
-                return 0;
+                return SymbolResolution.ReportNotFound(symbol);
             case ResolveOutcome.Ambiguous:
                 return SymbolResolution.ReportAmbiguous(symbol, resolution.Candidates, json);
         }
