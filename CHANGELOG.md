@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- TypeScript and JavaScript call sites and identifier references (calls, `new`, optional calls, type names, JSX element names). `extends` and `implements` are stored as `implementation`.
 - Python indexing for `.py` and `.pyi` through the vendored tree-sitter-python grammar (v0.25.0), including cross-file call sites matched by name.
 - `grammars/GRAMMARS.md` and `scripts/vendor-grammar.ps1` / `vendor-grammar.sh`, which re-copy a grammar tag and print the commit and file list to record.
 - `symdex mcp`, an MCP server on stdio, with client notes in `docs/mcp.md`. The server reports its assembly version. Tool calls refresh the index before answering.

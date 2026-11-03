@@ -22,10 +22,16 @@ internal static class GrammarRegistry
     ];
 
     // Must stay positionally in sync with queries/typescript.scm.
+    // The same list is used for the typescript and tsx grammars; every pattern has to compile
+    // against both (JSX tag names are ordinary identifiers, so the query names no jsx_* nodes).
     private static readonly string[] TypeScriptPatternKinds =
     [
         SymbolKinds.Class, SymbolKinds.Interface, SymbolKinds.Type, SymbolKinds.Function,
         SymbolKinds.Method, SymbolKinds.Field, SymbolKinds.Export, "import", "import",
+        "call", "call", "call", "call",
+        "implementation", "implementation", "implementation", "implementation", "implementation",
+        "implementation", "implementation", "implementation", "implementation", "implementation",
+        "import", "reference", "reference", "reference",
     ];
 
     // Must stay positionally in sync with queries/python.scm.

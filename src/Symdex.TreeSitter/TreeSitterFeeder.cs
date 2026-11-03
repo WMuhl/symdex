@@ -17,6 +17,25 @@ public sealed class TreeSitterFeeder : ISymbolFeeder
         SymbolKinds.Class, SymbolKinds.Interface, SymbolKinds.Struct, SymbolKinds.Enum,
     ];
 
+    // Parents whose `name` field is the binding being declared, not a use of that name.
+    private static readonly HashSet<string> DeclarationNameParents =
+    [
+        "class", "class_declaration", "abstract_class_declaration",
+        "interface_declaration", "type_alias_declaration", "enum_declaration",
+        "function_declaration", "function_expression", "function_signature",
+        "generator_function", "generator_function_declaration",
+        "variable_declarator", "required_parameter", "optional_parameter",
+        "type_parameter", "mapped_type_clause", "internal_module", "module",
+        "method_definition", "public_field_definition", "property_signature",
+        "method_signature", "abstract_method_signature", "enum_assignment",
+    ];
+
+    private static readonly byte[] NameField = "name"u8.ToArray();
+    private static readonly byte[] AliasField = "alias"u8.ToArray();
+    private static readonly byte[] ParameterField = "parameter"u8.ToArray();
+    private static readonly byte[] PatternField = "pattern"u8.ToArray();
+    private static readonly byte[] LeftField = "left"u8.ToArray();
+
     public string Name => "tree-sitter";
 
     public bool CanHandle(string language) =>
@@ -89,7 +108,7 @@ public sealed class TreeSitterFeeder : ISymbolFeeder
         {
             var kind = grammar.PatternKinds[match.PatternIndex];
 
-            if (kind is "import" or "call" or "reference")
+            if (kind is "import" or "call" or "reference" or "implementation")
             {
                 if (match.Captures.TryGetValue("source", out var sourceNode))
                 {
@@ -136,11 +155,16 @@ public sealed class TreeSitterFeeder : ISymbolFeeder
     {
         var defStarts = new HashSet<uint>(symbols.Select(s => NativeMethods.ts_node_start_byte(s.NameNode)));
         var callStarts = new HashSet<uint>();
+        var implementationStarts = new HashSet<uint>();
         foreach (var candidate in refCandidates)
         {
             if (candidate.PatternKind == "call")
             {
                 callStarts.Add(candidate.Start);
+            }
+            else if (candidate.PatternKind == "implementation")
+            {
+                implementationStarts.Add(candidate.Start);
             }
         }
 
@@ -148,10 +172,17 @@ public sealed class TreeSitterFeeder : ISymbolFeeder
         var refs = new List<RefRow>();
         foreach (var candidate in refCandidates)
         {
-            var refKind = candidate.PatternKind == "call" ? RefKinds.Call : RefKinds.Reference;
+            var refKind = candidate.PatternKind switch
+            {
+                "call" => RefKinds.Call,
+                "implementation" => RefKinds.Implementation,
+                _ => RefKinds.Reference,
+            };
             if (candidate.PatternKind == "reference")
             {
-                if (defStarts.Contains(candidate.Start) || callStarts.Contains(candidate.Start))
+                if (defStarts.Contains(candidate.Start) ||
+                    callStarts.Contains(candidate.Start) ||
+                    implementationStarts.Contains(candidate.Start))
                 {
                     continue;
                 }
@@ -420,9 +451,50 @@ public sealed class TreeSitterFeeder : ISymbolFeeder
             case "keyword_argument":
                 var first = NativeMethods.ts_node_child(parent, 0);
                 return first.Id == node.Id;
-            default:
-                return false;
+            // Binding positions. The name being declared is not a use of it.
+            case "array_pattern":
+            case "rest_pattern":
+            case "namespace_import":
+            case "import_clause":
+            case "import_require_clause":
+            case "namespace_export":
+            case "pair_pattern":
+            case "import_alias":
+                return true;
         }
+
+        if (FieldIs(parent, AliasField, node) && parentType is "import_specifier" or "export_specifier")
+        {
+            return true;
+        }
+
+        if (FieldIs(parent, ParameterField, node) && parentType is "arrow_function" or "catch_clause")
+        {
+            return true;
+        }
+
+        if (FieldIs(parent, LeftField, node) && parentType == "assignment_pattern")
+        {
+            return true;
+        }
+
+        if (FieldIs(parent, PatternField, node) && parentType is "required_parameter" or "optional_parameter")
+        {
+            return true;
+        }
+
+        if (FieldIs(parent, NameField, node) && DeclarationNameParents.Contains(parentType))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool FieldIs(TSNode parent, byte[] field, TSNode node)
+    {
+        var child = NativeMethods.ts_node_child_by_field_name(parent, field, (uint)field.Length);
+        return !child.IsNull && child.Id == node.Id;
     }
 
     private static TSNode? FindChild(TSNode node, params string[] types)
