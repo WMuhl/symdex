@@ -208,8 +208,10 @@ public sealed class IndexDatabase : IDisposable
     }
 
     /// <summary>
-    /// Distinct symbol keys for a query. An exact <c>fqname</c> match wins over <c>name</c>;
-    /// otherwise the distinct fqnames (or names, when fqname is null) of symbols with that name.
+    /// Distinct symbol keys for a query. An exact <c>fqname</c> match wins.
+    /// Otherwise the keys are the exact <c>name</c> matches plus, for a qualified C# query,
+    /// dotted-suffix matches of the fqname with its return type removed. Parameters on that
+    /// form are optional. Tree-sitter rows have a null <c>fqname</c> and match by name only.
     /// </summary>
     public IReadOnlyList<string> ResolveSymbolCandidates(string? nameOrFqName)
     {
@@ -229,12 +231,41 @@ public sealed class IndexDatabase : IDisposable
             return byFqName;
         }
 
-        return ReadKeys("""
-            SELECT DISTINCT COALESCE(fqname, name) AS key
+        var simple = SymbolNames.SimpleName(nameOrFqName);
+        var qualified = SymbolNames.IsQualifiedQuery(nameOrFqName);
+        var keys = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var (name, fqname) in ReadResolutionRows(nameOrFqName, simple, qualified))
+        {
+            if (string.Equals(name, nameOrFqName, StringComparison.Ordinal)
+                || (qualified && SymbolNames.Matches(nameOrFqName, fqname)))
+            {
+                keys.Add(fqname ?? name);
+            }
+        }
+
+        return keys.ToArray();
+    }
+
+    private List<(string Name, string? FqName)> ReadResolutionRows(string exact, string simple, bool includeConstructors)
+    {
+        using var cmd = _connection.CreateCommand();
+        var ctorClause = includeConstructors ? "OR name = '.ctor'" : "";
+        cmd.CommandText = $"""
+            SELECT DISTINCT name, fqname
             FROM symbols
-            WHERE name = $exact
-            ORDER BY key;
-            """, nameOrFqName);
+            WHERE name = $exact OR name = $simple
+            {ctorClause};
+            """;
+        cmd.Parameters.AddWithValue("$exact", exact);
+        cmd.Parameters.AddWithValue("$simple", simple);
+        var results = new List<(string Name, string? FqName)>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            results.Add((reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1)));
+        }
+
+        return results;
     }
 
     private List<string> ReadKeys(string sql, string exact)

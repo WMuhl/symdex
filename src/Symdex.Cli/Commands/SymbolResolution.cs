@@ -41,4 +41,11 @@ internal static class SymbolResolution
 
         return 2;
     }
+
+    public static int ReportNotFound(string query)
+    {
+        Console.Error.WriteLine(
+            $"symdex: no symbol matched '{query}'. Try `symdex find {SymbolNames.FindHintSegment(query)}`.");
+        return 0;
+    }
 }

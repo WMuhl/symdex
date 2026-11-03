@@ -156,6 +156,65 @@ public sealed class McpServerTests(McpSessionFixture fixture) : IClassFixture<Mc
         Assert.False(result.TryGetProperty("ambiguous", out _));
         Assert.Empty(result.GetProperty("results").EnumerateArray());
         Assert.Contains("No symbol matched", result.GetProperty("message").GetString());
+        Assert.Contains("symdex find ThisSymbolDoesNotExist", result.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task Callers_resolves_a_qualified_name_without_the_return_type()
+    {
+        var iface = await McpTestSupport.CallAsync(fixture.Client, "symdex_callers", new Dictionary<string, object>
+        {
+            ["symbol"] = "IPaymentProcessor.Charge",
+        });
+        Assert.False(iface.TryGetProperty("ambiguous", out _));
+        Assert.Contains("IPaymentProcessor.Charge(System.Decimal)", iface.GetProperty("symbol").GetString());
+        Assert.Contains(
+            iface.GetProperty("results").EnumerateArray(),
+            site => site.GetProperty("kind").GetString() == "call" && site.GetProperty("filePath").GetString()!.EndsWith("CheckoutService.cs"));
+
+        var withNamespace = await McpTestSupport.CallAsync(fixture.Client, "symdex_callers", new Dictionary<string, object>
+        {
+            ["symbol"] = "SampleLib.IPaymentProcessor.Charge",
+        });
+        Assert.Equal(iface.GetProperty("symbol").GetString(), withNamespace.GetProperty("symbol").GetString());
+
+        var impl = await McpTestSupport.CallAsync(fixture.Client, "symdex_refs", new Dictionary<string, object>
+        {
+            ["symbol"] = "PaymentProcessor.Charge(decimal)",
+        });
+        Assert.False(impl.TryGetProperty("ambiguous", out _));
+        var implSymbol = impl.GetProperty("symbol").GetString();
+        Assert.Contains("PaymentProcessor.Charge(System.Decimal)", implSymbol);
+        Assert.DoesNotContain("IPaymentProcessor", implSymbol);
+
+        var boundary = await McpTestSupport.CallAsync(fixture.Client, "symdex_callers", new Dictionary<string, object>
+        {
+            ["symbol"] = "Processor.Charge",
+        });
+        Assert.False(boundary.TryGetProperty("ambiguous", out _));
+        Assert.Empty(boundary.GetProperty("results").EnumerateArray());
+        Assert.Contains("symdex find Charge", boundary.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task Ambiguous_candidates_round_trip_into_callers()
+    {
+        var ambiguous = await McpTestSupport.CallAsync(fixture.Client, "symdex_callers", new Dictionary<string, object>
+        {
+            ["symbol"] = "Charge",
+        });
+        var candidates = ambiguous.GetProperty("candidates").EnumerateArray().Select(item => item.GetString()!).ToArray();
+        Assert.True(candidates.Length >= 2);
+        foreach (var candidate in candidates)
+        {
+            Assert.Contains("(System.Decimal)", candidate);
+            var again = await McpTestSupport.CallAsync(fixture.Client, "symdex_callers", new Dictionary<string, object>
+            {
+                ["symbol"] = candidate,
+            });
+            Assert.False(again.TryGetProperty("ambiguous", out _));
+            Assert.Equal(candidate, again.GetProperty("symbol").GetString());
+        }
     }
 
     [Fact]

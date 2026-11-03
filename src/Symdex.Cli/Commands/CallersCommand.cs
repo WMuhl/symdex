@@ -15,7 +15,7 @@ internal static class CallersCommand
         switch (resolution.Outcome)
         {
             case ResolveOutcome.NotFound:
-                return 0;
+                return SymbolResolution.ReportNotFound(symbol);
             case ResolveOutcome.Ambiguous:
                 return SymbolResolution.ReportAmbiguous(symbol, resolution.Candidates, json);
         }
