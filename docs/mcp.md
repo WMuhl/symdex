@@ -122,4 +122,4 @@ command = "dotnet"
 args = ["run", "--project", "src/Symdex.Cli", "--no-build", "--", "mcp"]
 ```
 
-The dev command is the same `dotnet run --project src/Symdex.Cli -- mcp` form; `--no-build` keeps the client's stdout pipe limited to MCP messages after the project has been built.
+Build once with `dotnet build src/Symdex.Cli` before starting the client. Keep `--no-build` in these configs: without it, `dotnet run` may build on launch and write build output to the stdout pipe the client reads MCP messages from.
