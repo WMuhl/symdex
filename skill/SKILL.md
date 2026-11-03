@@ -79,17 +79,26 @@ ambiguous symbol 'Charge', candidates:
 C# in a restored solution is indexed semantically with Roslyn: `refs`/`callers` are bound to the
 exact symbol. TypeScript, JavaScript, and Python (and C# when the solution can't be loaded) are
 indexed syntactically: their symbols have no fully-qualified name and `refs`/`callers` match by
-name across all of those languages. Python records calls and identifier uses; TypeScript and
-JavaScript record only imports, so an empty `refs`/`callers` result there does not mean the symbol
-is unused - fall back to grep. Check the reported lines before relying on them.
+name across all of those languages. All three record calls and other identifier uses. TypeScript
+and JavaScript also record `new`, optional calls, type names, and JSX element names; `extends` and
+`implements` are kind `implementation` (listed by `refs`, not `callers`). Two definitions of the
+same name share one result. Check the reported lines before relying on them.
 
 ```
 $ symdex callers helper
 helper
-reference py/app.py:1
-call py/app.py:5
-call py/calc.py:16
 reference ts/math.ts:1
+call ts/math.ts:5
+```
+
+In the Python fixture the same command is the import and both call sites:
+
+```
+$ symdex callers helper
+helper
+reference app.py:1
+call app.py:5
+call calc.py:16
 ```
 
 ## The index self-manages

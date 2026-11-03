@@ -78,7 +78,7 @@ Cursor, in `.cursor/mcp.json`:
 | Language | Extensions | Engine | What `refs` / `callers` mean | Requirements |
 | --- | --- | --- | --- | --- |
 | C# | `.cs` | Roslyn (semantic). Tree-sitter if the project cannot be opened or has compile errors. | Roslyn binds the symbol. `refs` lists references and implementations. `callers` lists calls and other references to that symbol. Fully-qualified names look like `SampleLib.IPaymentProcessor` and `System.Decimal SampleLib.IPaymentProcessor.Charge(System.Decimal)`. A short name that matches more than one of those exits 2. The tree-sitter fallback stores no fully-qualified name, and its C# query records `using` directives, not call sites. | One `.sln` at the repo root, or a single `.csproj` there if there is no solution. Otherwise pass `--solution`. The .NET SDK that `dotnet --version` prints in that repo must be installed. A project with package references has to be restored first (`dotnet restore`); an unrestored `PackageReference` fails the workspace load and that run uses tree-sitter. An SDK project with no package references can load without restore. |
-| TypeScript | `.ts`, `.tsx` | tree-sitter. `.ts` uses the typescript grammar. `.tsx` uses the tsx grammar. | Import paths and imported names whose text matches. Call expressions are not indexed. In the sample repo, `refs helper` is the import on `ts/math.ts:1` and not the call inside `add`. | The tree-sitter library shipped with the tool or built with symdex. |
+| TypeScript | `.ts`, `.tsx` | tree-sitter. `.ts` uses the typescript grammar. `.tsx` uses the tsx grammar. | Name match, including across files: calls (`foo()`, `obj.foo()`, `new Foo()`, `obj?.foo()`), imports, type names, JSX element names, and other identifiers. `extends` and `implements` are kind `implementation`. Two definitions of the same name share one key. In the sample repo, `refs helper` is the import on `ts/math.ts:1` and the call inside `add`. | The tree-sitter library shipped with the tool or built with symdex. |
 | JavaScript | `.js`, `.jsx` | tree-sitter. `.js` uses the typescript grammar. `.jsx` uses the tsx grammar. A separate JavaScript grammar is not vendored. | Same as TypeScript. | Same as TypeScript. |
 | Python | `.py`, `.pyi` | tree-sitter | Name match, including across files: calls, imports, and other identifiers with that text. Two definitions of the same name share one key. Module-level assignments are stored as kind `export` (the sample's `PI`). | Same as TypeScript. |
 
@@ -169,6 +169,18 @@ call app.py:5
 call calc.py:16
 ```
 
+In the TypeScript sample the same command is the import and the call inside `add`:
+
+```bash
+symdex callers helper
+```
+
+```text
+helper
+reference ts/math.ts:1
+call ts/math.ts:5
+```
+
 `rebuild` deletes the database and indexes every candidate file again. On the C# sample that prints `rebuilt index: 5 files indexed`. Ordinary queries do not need it.
 
 `mcp` serves the same queries over MCP. It takes `--repo` and `--solution` and does not take a symbol on the command line. See [docs/mcp.md](docs/mcp.md).
@@ -198,7 +210,7 @@ If several `.sln` files sit at the repo root, pass `--solution`. The same applie
 On 22 scripted questions across Humanizer (C#, Roslyn), zod (TypeScript), and requests (Python),
 symdex's output plus the line spans it reports came to about 2% of the bytes of a grep-then-read-the-files
 baseline (49,769 vs 2,357,421). The cost is recall: 0.79 versus grep's 1.00. Four questions came back
-empty, mostly TypeScript references, which are not indexed yet. Outlines of small files cost more than
+empty. Three of those were TypeScript `refs` and `callers` questions; that run did not index calls or identifier references (it does now). Outlines of small files cost more than
 just reading them. Where symdex did return locations, mean precision was 0.83 versus grep's 0.35. The
 "agent" is a fixed rule, not a model, and tokens are estimated as bytes/4. Methodology, per-question
 results, latencies, and known losses are in [bench/README.md](bench/README.md).
