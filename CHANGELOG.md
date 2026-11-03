@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Target framework is `net10.0`. `global.json` pins the 10.0.100 SDK with `rollForward: latestFeature`. Release 1.0.0 targeted `net8.0` and SDK 8.0.423.
+- `refs` and `callers` accept a C# name without its return type, with or without parameters (`IPaymentProcessor.Charge`, `PaymentProcessor.Charge(decimal)`), matched on a `.` boundary. A query that matches nothing prints a `symdex find` hint to stderr.
+- When the repo root has no `.sln`, `.slnx`, or `.csproj`, the Roslyn feeder searches up to three levels down for a `.sln` or `.slnx` and names the one it chose on stderr.
+- Multi-target C# projects are indexed once, using the highest target framework.
+- The index schema is version 2, with unique indexes on symbols and refs. An existing `.index/code.db` is dropped and rebuilt the first time this version opens it.
 - CLI parsing uses System.CommandLine 2.0.14. Release 1.0.0 used the 2.0 beta. Flags, text output, and the ambiguous-symbol exit code are unchanged.
 - Release zips are framework-dependent and are not single-file. Release 1.0.0 published self-contained single-file zips for `linux-x64`, `osx-arm64`, and `win-x64`. Single-file publish leaves `Assembly.Location` empty, and the Roslyn feeder then cannot locate the SDK. See [docs/design-decisions.md](docs/design-decisions.md).
 
@@ -29,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Roslyn opens a project with the SDK `dotnet --version` resolves in that repository. It previously registered the host process's MSBuild, so a repo restored by another SDK compiled with no reference assemblies and fell back to tree-sitter.
 - `refs` and `callers` prefer an exact fully-qualified name. A query that matches an `fqname` no longer also matches a different symbol that has that string as its short name.
+- Reindexing a changed C# file keeps its references to symbols declared in other files. They were deleted and not written back until a full rebuild.
+- Multi-target C# projects no longer store each reference once per target framework.
+- `find` treats `%`, `_`, and `\` as literal characters.
 - `refs` returns no rows when the symbol key is missing. Binding a null key used to throw from Microsoft.Data.Sqlite.
 - The Windows native build waits on `cl.exe` only. Waiting on the process tree stalled the build while MSVC's `vctip.exe` telemetry child was still running.
 
