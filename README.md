@@ -195,7 +195,13 @@ If several `.sln` files sit at the repo root, pass `--solution`. The same applie
 
 ## Benchmarks
 
-Timings are collected in [bench/README.md](bench/README.md).
+On 22 scripted questions across Humanizer (C#, Roslyn), zod (TypeScript), and requests (Python),
+symdex's output plus the line spans it reports came to about 2% of the bytes of a grep-then-read-the-files
+baseline (49,769 vs 2,357,421). The cost is recall: 0.79 versus grep's 1.00. Four questions came back
+empty, mostly TypeScript references, which are not indexed yet. Outlines of small files cost more than
+just reading them. Where symdex did return locations, mean precision was 0.83 versus grep's 0.35. The
+"agent" is a fixed rule, not a model, and tokens are estimated as bytes/4. Methodology, per-question
+results, latencies, and known losses are in [bench/README.md](bench/README.md).
 
 ## Building
 
