@@ -33,13 +33,24 @@ public sealed class IndexDatabase : IDisposable
             pragma.ExecuteNonQuery();
         }
 
-        using (var ddl = connection.CreateCommand())
+        using (var meta = connection.CreateCommand())
         {
-            ddl.CommandText = Schema.Ddl;
-            ddl.ExecuteNonQuery();
+            meta.CommandText = """
+                CREATE TABLE IF NOT EXISTS meta (
+                  key TEXT PRIMARY KEY,
+                  value TEXT NOT NULL
+                );
+                """;
+            meta.ExecuteNonQuery();
         }
 
-        return new IndexDatabase(connection);
+        var database = new IndexDatabase(connection);
+        if (database.ReadSchemaVersion() != Schema.Version)
+        {
+            database.Rebuild();
+        }
+
+        return database;
     }
 
     public void Rebuild()
@@ -57,6 +68,22 @@ public sealed class IndexDatabase : IDisposable
         using var ddl = _connection.CreateCommand();
         ddl.CommandText = Schema.Ddl;
         ddl.ExecuteNonQuery();
+
+        using var version = _connection.CreateCommand();
+        version.CommandText = """
+            INSERT INTO meta (key, value) VALUES ('schema_version', $version)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+            """;
+        version.Parameters.AddWithValue("$version", Schema.Version.ToString());
+        version.ExecuteNonQuery();
+    }
+
+    private int ReadSchemaVersion()
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "SELECT value FROM meta WHERE key = 'schema_version';";
+        var value = cmd.ExecuteScalar();
+        return value is string text && int.TryParse(text, out var version) ? version : 0;
     }
 
     public IReadOnlyDictionary<string, FileRecord> GetAllFiles()
@@ -74,6 +101,33 @@ public sealed class IndexDatabase : IDisposable
                 reader.GetString(3),
                 reader.GetString(4));
             result[record.Path] = record;
+        }
+
+        return result;
+    }
+
+    /// <summary>Symbol identity keys grouped by repo-relative file path.</summary>
+    public Dictionary<string, HashSet<string>> GetSymbolIdentities()
+    {
+        var result = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT f.path, s.kind, s.fqname, s.name
+            FROM symbols s
+            JOIN files f ON f.id = s.file_id;
+            """;
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var path = reader.GetString(0);
+            if (!result.TryGetValue(path, out var keys))
+            {
+                keys = new HashSet<string>(StringComparer.Ordinal);
+                result[path] = keys;
+            }
+
+            var fqName = reader.IsDBNull(2) ? null : reader.GetString(2);
+            keys.Add(SymbolIdentity.Key(reader.GetString(1), fqName, reader.GetString(3)));
         }
 
         return result;
@@ -114,20 +168,14 @@ public sealed class IndexDatabase : IDisposable
             deleteSymbols.ExecuteNonQuery();
         }
 
-        using (var deleteRefs = _connection.CreateCommand())
-        {
-            deleteRefs.Transaction = transaction;
-            deleteRefs.CommandText = "DELETE FROM refs WHERE file_id = $fileId;";
-            deleteRefs.Parameters.AddWithValue("$fileId", fileId);
-            deleteRefs.ExecuteNonQuery();
-        }
+        DeleteRefs(fileId, transaction);
 
         foreach (var symbol in symbols)
         {
             using var insert = _connection.CreateCommand();
             insert.Transaction = transaction;
             insert.CommandText = """
-                INSERT INTO symbols (name, fqname, kind, signature, doc, file_id, start_line, end_line, container)
+                INSERT OR IGNORE INTO symbols (name, fqname, kind, signature, doc, file_id, start_line, end_line, container)
                 VALUES ($name, $fqname, $kind, $signature, $doc, $fileId, $startLine, $endLine, $container);
                 """;
             insert.Parameters.AddWithValue("$name", symbol.Name);
@@ -142,12 +190,28 @@ public sealed class IndexDatabase : IDisposable
             insert.ExecuteNonQuery();
         }
 
+        InsertRefs(fileId, refs, transaction);
+
+        transaction.Commit();
+    }
+
+    private void DeleteRefs(long fileId, SqliteTransaction transaction)
+    {
+        using var deleteRefs = _connection.CreateCommand();
+        deleteRefs.Transaction = transaction;
+        deleteRefs.CommandText = "DELETE FROM refs WHERE file_id = $fileId;";
+        deleteRefs.Parameters.AddWithValue("$fileId", fileId);
+        deleteRefs.ExecuteNonQuery();
+    }
+
+    private void InsertRefs(long fileId, IReadOnlyList<RefRow> refs, SqliteTransaction transaction)
+    {
         foreach (var reference in refs)
         {
             using var insert = _connection.CreateCommand();
             insert.Transaction = transaction;
             insert.CommandText = """
-                INSERT INTO refs (symbol_fqname, file_id, line, kind)
+                INSERT OR IGNORE INTO refs (symbol_fqname, file_id, line, kind)
                 VALUES ($fqname, $fileId, $line, $kind);
                 """;
             insert.Parameters.AddWithValue("$fqname", reference.SymbolFqName);
@@ -156,7 +220,13 @@ public sealed class IndexDatabase : IDisposable
             insert.Parameters.AddWithValue("$kind", reference.Kind);
             insert.ExecuteNonQuery();
         }
+    }
 
+    public void ReplaceRefs(long fileId, IReadOnlyList<RefRow> refs)
+    {
+        using var transaction = _connection.BeginTransaction();
+        DeleteRefs(fileId, transaction);
+        InsertRefs(fileId, refs, transaction);
         transaction.Commit();
     }
 
@@ -172,6 +242,29 @@ public sealed class IndexDatabase : IDisposable
             """;
         cmd.Parameters.AddWithValue("$path", repoRelativeFilePath);
         return ReadSymbols(cmd);
+    }
+
+    public IReadOnlyList<RefRecord> AllRefs()
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT r.symbol_fqname, r.kind, f.path, r.line
+            FROM refs r
+            JOIN files f ON f.id = r.file_id
+            ORDER BY f.path, r.line, r.kind, r.symbol_fqname;
+            """;
+        var results = new List<RefRecord>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            results.Add(new RefRecord(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetInt32(3)));
+        }
+
+        return results;
     }
 
     public IReadOnlyList<SymbolRecord> Find(string query, string? kind, int limit)
@@ -268,7 +361,7 @@ public sealed class IndexDatabase : IDisposable
             JOIN files f ON f.id = r.file_id
             WHERE r.symbol_fqname = $key
             {kindClause}
-            ORDER BY f.path, r.line
+            ORDER BY f.path, r.line, r.kind
             LIMIT $limit;
             """;
         cmd.Parameters.AddWithValue("$key", symbolFqNameOrName);

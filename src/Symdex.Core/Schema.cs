@@ -3,7 +3,7 @@ namespace Symdex.Core;
 /// <summary>SQL DDL for the per-repo index database. Applied once per connection via <see cref="IndexDatabase"/>.</summary>
 public static class Schema
 {
-    public const int Version = 1;
+    public const int Version = 2;
 
     public const string Ddl = """
         PRAGMA foreign_keys = ON;
@@ -45,8 +45,12 @@ public static class Schema
         CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
         CREATE INDEX IF NOT EXISTS idx_symbols_fqname ON symbols(fqname);
         CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_symbols_dedupe ON symbols(
+          file_id, name, ifnull(fqname, ''), kind, ifnull(signature, ''), start_line, end_line, ifnull(container, '')
+        );
         CREATE INDEX IF NOT EXISTS idx_refs_fqname ON refs(symbol_fqname);
         CREATE INDEX IF NOT EXISTS idx_refs_file ON refs(file_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_refs_dedupe ON refs(symbol_fqname, file_id, line, kind);
 
         CREATE VIRTUAL TABLE IF NOT EXISTS symbols_fts USING fts5(
           name, fqname, doc, content='symbols', content_rowid='id'

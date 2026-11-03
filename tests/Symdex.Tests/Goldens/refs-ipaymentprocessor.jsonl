@@ -1,5 +1,5 @@
 {"symbol":"SampleLib.IPaymentProcessor"}
 {"kind":"reference","filePath":"csharp/SampleLib/CheckoutService.cs","line":6}
 {"kind":"reference","filePath":"csharp/SampleLib/CheckoutService.cs","line":9}
-{"kind":"reference","filePath":"csharp/SampleLib/PaymentProcessor.cs","line":4}
 {"kind":"implementation","filePath":"csharp/SampleLib/PaymentProcessor.cs","line":4}
+{"kind":"reference","filePath":"csharp/SampleLib/PaymentProcessor.cs","line":4}

@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Symdex.Core\Symdex.Core.csproj" />
+    <InternalsVisibleTo Include="Symdex.Tests" />
   </ItemGroup>
 
   <ItemGroup>
