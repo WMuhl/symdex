@@ -112,6 +112,9 @@ internal static partial class NativeMethods
     public static partial TSNode ts_node_child(TSNode node, uint index);
 
     [LibraryImport(Lib)]
+    public static partial TSNode ts_node_child_by_field_name(TSNode node, byte[] name, uint nameLength);
+
+    [LibraryImport(Lib)]
     public static partial IntPtr ts_query_new(
         IntPtr language, byte[] source, uint sourceLen, out uint errorOffset, out TSQueryError errorType);
 

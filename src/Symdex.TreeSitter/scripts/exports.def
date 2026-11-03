@@ -15,6 +15,7 @@ EXPORTS
     ts_node_parent
     ts_node_child_count
     ts_node_child
+    ts_node_child_by_field_name
     ts_query_new
     ts_query_delete
     ts_query_capture_name_for_id

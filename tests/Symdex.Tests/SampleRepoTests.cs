@@ -133,6 +133,8 @@ public sealed class SampleRepoTests(RestoredSampleRepoFixture fixture)
 
         var refs = db.RefsFor("helper", kindFilter: null, 50);
 
-        Assert.Contains(refs, r => r.FilePath.EndsWith("math.ts") && r.Kind == RefKinds.Reference);
+        Assert.Contains(refs, r => r.FilePath.EndsWith("math.ts") && r.Kind == RefKinds.Reference && r.Line == 1);
+        Assert.Contains(refs, r => r.FilePath.EndsWith("math.ts") && r.Kind == RefKinds.Call && r.Line == 5);
+        Assert.DoesNotContain(refs, r => r.FilePath.EndsWith("helper.ts"));
     }
 }

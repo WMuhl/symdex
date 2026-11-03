@@ -40,7 +40,7 @@ Current releases are a framework-dependent .NET tool, plus per-RID zips from `do
 
 Resolution tries an exact `fqname` match first. If that hits, the short-name lookup is skipped, so a fully-qualified name is not also treated as some other symbol's short name. Otherwise the distinct fully-qualified names of symbols with that short name are the candidates. Tree-sitter rows store a null `fqname`, and the key falls back to the bare name, so every definition of that name is one candidate. More than one candidate is printed and the process exits 2. Guessing would attach the reference list to the wrong symbol.
 
-`callers` then keeps reference rows whose kind is `call` or `reference`. `refs` keeps every kind stored for that key, including `implementation` on the Roslyn path.
+`callers` then keeps reference rows whose kind is `call` or `reference`. `refs` keeps every kind stored for that key, including `implementation`: Roslyn interface implementations, and TypeScript `extends` / `implements`.
 
 ## `find` uses both LIKE and FTS
 
@@ -48,7 +48,7 @@ Resolution tries an exact `fqname` match first. If that hits, the short-name loo
 
 ## `.js` and `.jsx` use the TypeScript grammars
 
-The vendored grammars are tree-sitter-c-sharp, tree-sitter-typescript (typescript and tsx), and tree-sitter-python. There is no tree-sitter-javascript grammar in the tree. `.ts` and `.js` are parsed with the typescript grammar. `.tsx` and `.jsx` are parsed with the tsx grammar. Both grammars accept the JavaScript those extensions contain. The typescript and tsx grammars share `queries/typescript.scm`.
+The vendored grammars are tree-sitter-c-sharp, tree-sitter-typescript (typescript and tsx), and tree-sitter-python. There is no tree-sitter-javascript grammar in the tree. `.ts` and `.js` are parsed with the typescript grammar. `.tsx` and `.jsx` are parsed with the tsx grammar. Both grammars accept the JavaScript those extensions contain. The typescript and tsx grammars share `queries/typescript.scm`. JSX tag names are `identifier` nodes, so that query does not mention `jsx_*` types. Those node types exist only in the tsx grammar, and a pattern that names one fails to compile for `.ts` and `.js`.
 
 ## SQLite pooling is off
 

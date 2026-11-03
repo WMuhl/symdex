@@ -185,7 +185,7 @@ The Humanizer incremental touch was a trailing newline on `src/Humanizer/Truncat
 
 ## Bugs and slowness
 
-Nothing here was patched in `src/`. Numbers are from this run unless a line says it was a setup probe.
+Nothing here was patched in `src/` for this run. Numbers are from this run unless a line says it was a setup probe. TypeScript call and reference indexing landed afterward; see bug 3.
 
 ### 1. Multi-target projects store the same reference many times
 
@@ -203,11 +203,11 @@ After the index exists, appending a newline to `src/Humanizer/TruncateExtensions
 
 `referenceableSymbols` only contains symbols declared in the changed file. `ITruncator` is declared elsewhere, so the re-feed of `TruncateExtensions.cs` does not search for references to it. `ReplaceSymbolsAndRefs` deletes every ref row for that `file_id` first (`IndexDatabase.cs`). Tree-sitter re-parses the touched file and re-emits name-based refs; the requests incremental case kept its eight lines in 211 ms. The 6.4 s is a Roslyn workspace reload for a one-line edit.
 
-### 3. TypeScript queries do not record calls or identifier references
+### 3. TypeScript queries did not record calls or identifier references
 
-`src/Symdex.TreeSitter/queries/typescript.scm` ends at import patterns: class, interface, type, function, method, field, export const, and two import forms. There is no call pattern and no general identifier pattern. `queries/python.scm` has both, which is why the requests `refs` and `callers` questions returned rows and the zod ones did not.
+Fixed after this run. `queries/typescript.scm` now records calls, `new`, identifier and type references, and `extends` / `implements` as `implementation`. The zod `refs` / `callers` rows in the table above are from before that change: stdout was the symbol header only (33, 27, and 23 bytes). Recall 0. `find` and `outline` on the same repo matched the expected definitions.
 
-Repro, on zod `v4.6.7`: `symdex --repo . --json refs ZodMiniISODuration`, `symdex callers _isoDuration`, `symdex callers duration`. Stdout is the symbol header only (33, 27, and 23 bytes in this run). Recall 0. `find` and `outline` on the same repo matched the expected definitions.
+At the time of the run, `queries/typescript.scm` ended at import patterns. `queries/python.scm` already had call and identifier patterns, which is why the requests `refs` and `callers` questions returned rows and the zod ones did not.
 
 ### 4. `find` does not escape `LIKE` metacharacters
 
