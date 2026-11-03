@@ -53,6 +53,12 @@ public static class SymbolKinds
     public const string Type = "type";
 }
 
+public static class SymbolIdentity
+{
+    public static string Key(string kind, string? fqName, string name) =>
+        kind + "\0" + (fqName ?? name);
+}
+
 public static class RefKinds
 {
     public const string Reference = "reference";

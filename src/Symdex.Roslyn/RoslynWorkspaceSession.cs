@@ -29,7 +29,7 @@ internal sealed class RoslynWorkspaceSession : IDisposable
         if (TryReuse(solutionPath, request, out var updated))
         {
             _solution = updated;
-            return RoslynWorkspaceIndexer.Index(updated!, request);
+            return RoslynWorkspaceIndexer.Index(updated!, request, note: null);
         }
 
         return OpenFresh(request, solutionPath);
@@ -50,7 +50,7 @@ internal sealed class RoslynWorkspaceSession : IDisposable
         _solution = opened.Solution;
         _solutionPath = solutionPath;
         Remember(solutionPath, opened.Solution!);
-        return RoslynWorkspaceIndexer.Index(opened.Solution!, request);
+        return RoslynWorkspaceIndexer.Index(opened.Solution!, request, opened.Note);
     }
 
     private bool TryReuse(string solutionPath, FeedRequest request, out Solution? updated)
