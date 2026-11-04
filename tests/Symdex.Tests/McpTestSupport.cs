@@ -48,6 +48,11 @@ internal static class McpTestSupport
         return env;
     }
 
+    // Left unset, the client first probes `server/discover` with a short timeout; a slow server
+    // start (Windows CI) makes it fall back to `initialize` under 2026-07-28, which the server
+    // rejects. Pinning an initialize-capable revision skips the probe.
+    public static McpClientOptions ClientOptions { get; } = new() { ProtocolVersion = "2025-11-25" };
+
     public static StdioClientTransport StartTransport(string repoRoot, Action<string> onStderr)
     {
         return new StdioClientTransport(new StdioClientTransportOptions
@@ -88,7 +93,9 @@ public sealed class McpSessionFixture : IAsyncLifetime
     {
         _repo = TestUtil.CopyFixture("sample-repo");
         TestUtil.Restore(Path.Combine(_repo, "SampleRepo.sln"));
-        Client = await McpClient.CreateAsync(McpTestSupport.StartTransport(_repo, AddStderr));
+        Client = await McpClient.CreateAsync(
+            McpTestSupport.StartTransport(_repo, AddStderr),
+            McpTestSupport.ClientOptions);
     }
 
     public async Task DisposeAsync()
