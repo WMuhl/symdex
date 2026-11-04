@@ -1,0 +1,3 @@
+<Project>
+  <!-- Isolates this fixture from the outer symdex repo's Directory.Build.props. -->
+</Project>

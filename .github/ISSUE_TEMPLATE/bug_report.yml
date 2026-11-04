@@ -1,0 +1,76 @@
+name: Bug report
+description: A symdex command returned the wrong result, crashed, or indexed the wrong files.
+title: "bug: "
+body:
+  - type: input
+    id: version
+    attributes:
+      label: symdex version
+      description: Output of `symdex --version` (or `dotnet run --project src/Symdex.Cli -- --version` from a checkout).
+      placeholder: 0.1.0+commit
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Windows 11, Ubuntu 24.04, macOS 15
+    validations:
+      required: true
+
+  - type: textarea
+    id: sdks
+    attributes:
+      label: Installed .NET SDKs
+      description: Paste the output of `dotnet --list-sdks`. For a C# indexing problem, also include `dotnet --version` run inside the repository you indexed.
+      render: text
+    validations:
+      required: true
+
+  - type: dropdown
+    id: language
+    attributes:
+      label: Language
+      options:
+        - C#
+        - TypeScript
+        - JavaScript
+        - Python
+        - Other / not language-specific
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The full command, including `--repo`, `--solution`, `--json`, and `--limit` if you passed them.
+      render: bash
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+      description: What you expected the command to print, or what the index should have contained.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+      description: What it printed or did instead. Include the exit code.
+    validations:
+      required: true
+
+  - type: textarea
+    id: stderr
+    attributes:
+      label: stderr
+      description: Anything printed on stderr, including `reindexed N files` and lines that start with `symdex:`.
+      render: text
+    validations:
+      required: false

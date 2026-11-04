@@ -5,19 +5,47 @@ on:
     branches: [main, master]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.x"
 
       - name: Verify a C toolchain is available (tree-sitter native build)
+        if: runner.os != 'Windows'
         run: cc --version
+
+      - name: Verify MSVC is discoverable (tree-sitter native build)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path -LiteralPath $vswhere)) {
+            Write-Error "vswhere.exe not found at $vswhere"
+            exit 1
+          }
+          $install = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $install) {
+            Write-Error "MSVC C++ tools not found via vswhere"
+            exit 1
+          }
+          Write-Output "MSVC: $install"
 
       - name: Restore
         run: dotnet restore symdex.sln
@@ -32,5 +60,24 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: test-results-${{ matrix.os }}
           path: "**/test-results.trx"
+
+  package-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Verify a C toolchain is available (tree-sitter native build)
+        run: cc --version
+
+      - name: Pack
+        run: dotnet pack src/Symdex.Cli/Symdex.Cli.csproj -c Release -o artifacts/package
+
+      - name: Smoke test
+        run: bash scripts/smoke-test.sh artifacts/package/*.nupkg

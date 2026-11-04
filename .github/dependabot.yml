@@ -1,0 +1,25 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      roslyn-msbuild:
+        patterns:
+          - "Microsoft.CodeAnalysis*"
+          - "Microsoft.Build*"
+    ignore:
+      - dependency-name: "Microsoft.CodeAnalysis*"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "Microsoft.Build*"
+        update-types:
+          - "version-update:semver-major"
+    exclude-paths:
+      - "tests/fixtures/sample-repo"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

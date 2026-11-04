@@ -53,6 +53,12 @@ public static class SymbolKinds
     public const string Type = "type";
 }
 
+public static class SymbolIdentity
+{
+    public static string Key(string kind, string? fqName, string name) =>
+        kind + "\0" + (fqName ?? name);
+}
+
 public static class RefKinds
 {
     public const string Reference = "reference";
@@ -66,4 +72,5 @@ public static class Languages
     public const string CSharp = "csharp";
     public const string TypeScript = "typescript";
     public const string JavaScript = "javascript";
+    public const string Python = "python";
 }
